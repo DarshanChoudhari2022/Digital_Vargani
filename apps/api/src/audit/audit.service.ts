@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { AuthContext } from '../auth/auth-context';
 import { assertSameMandal } from '../auth/tenant-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditEventsQueryDto } from './dto/audit-events-query.dto';
+
+interface AuditEventWhere {
+  action?: string;
+  actorUserId?: string;
+  entityId?: string;
+  entityType?: string;
+  mandalId: string;
+}
 
 @Injectable()
 export class AuditService {
@@ -13,7 +20,7 @@ export class AuditService {
     assertSameMandal(ctx, mandalId);
 
     const skip = (query.page - 1) * query.limit;
-    const where: Prisma.AuditEventWhereInput = {
+    const where: AuditEventWhere = {
       action: query.action,
       actorUserId: query.actorUserId,
       entityId: query.entityId,

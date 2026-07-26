@@ -4,7 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CustomFieldType, Prisma, TemplateStatus } from '@prisma/client';
+import { CustomFieldType, TemplateStatus } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { AuthContext } from '../auth/auth-context';
 import { assertSameMandal } from '../auth/tenant-scope';
 import { slugify } from '../common/utils/slugify';
@@ -24,6 +25,8 @@ const systemTemplateFields = new Set([
   'areaName',
   'createdAt',
 ]);
+
+type JsonWriteValue = never;
 
 @Injectable()
 export class TemplatesService {
@@ -57,7 +60,7 @@ export class TemplatesService {
           key,
           label: dto.label,
           mandalId,
-          options: dto.options ? (dto.options as Prisma.InputJsonValue) : undefined,
+          options: dto.options ? toJsonWriteValue(dto.options) : undefined,
           printOnSlip: dto.printOnSlip,
           required: dto.required,
           sortOrder: dto.sortOrder,
@@ -68,7 +71,7 @@ export class TemplatesService {
       await this.audit(ctx, mandalId, 'custom_field', field.id, 'created', undefined, field);
       return field;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Custom field key already exists for this festival.');
       }
 
@@ -145,7 +148,7 @@ export class TemplatesService {
           backgroundFileUrl: dto.backgroundFileUrl,
           canvasHeight: dto.canvasHeight,
           canvasWidth: dto.canvasWidth,
-          renderConfig: dto.renderConfig as Prisma.InputJsonValue,
+          renderConfig: toJsonWriteValue(dto.renderConfig),
           templateId,
           version: versionNumber,
         },
@@ -155,7 +158,7 @@ export class TemplatesService {
         data: {
           action: 'created',
           actorUserId: ctx.userId,
-          after: version as unknown as Prisma.InputJsonValue,
+          after: toJsonWriteValue(version),
           entityId: version.id,
           entityType: 'slip_template_version',
           mandalId,
@@ -209,7 +212,7 @@ export class TemplatesService {
         data: {
           action: 'activated',
           actorUserId: ctx.userId,
-          after: activeVersion as unknown as Prisma.InputJsonValue,
+          after: toJsonWriteValue(activeVersion),
           entityId: versionId,
           entityType: 'slip_template_version',
           mandalId,
@@ -283,12 +286,16 @@ export class TemplatesService {
       data: {
         action,
         actorUserId: ctx.userId,
-        after: after as Prisma.InputJsonValue,
-        before: before as Prisma.InputJsonValue,
+        after: toJsonWriteValue(after),
+        before: toJsonWriteValue(before),
         entityId,
         entityType,
         mandalId,
       },
     });
   }
+}
+
+function toJsonWriteValue(value: unknown): JsonWriteValue {
+  return value as JsonWriteValue;
 }

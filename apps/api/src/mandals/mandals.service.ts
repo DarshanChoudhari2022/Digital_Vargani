@@ -1,11 +1,23 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountStatus, Prisma, UserRole } from '@prisma/client';
+import { AccountStatus, UserRole } from '@prisma/client';
 import argon2 from 'argon2';
 import { slugify } from '../common/utils/slugify';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMandalDto } from './dto/create-mandal.dto';
 import { ListMandalsQueryDto } from './dto/list-mandals-query.dto';
 import { UpdateMandalStatusDto } from './dto/update-mandal-status.dto';
+
+type JsonWriteValue = never;
+
+interface MandalListWhere {
+  OR?: Array<{
+    city?: { contains: string; mode: 'insensitive' };
+    locality?: { contains: string; mode: 'insensitive' };
+    name?: { contains: string; mode: 'insensitive' };
+    slug?: { contains: string; mode: 'insensitive' };
+  }>;
+  status?: AccountStatus;
+}
 
 @Injectable()
 export class MandalsService {
@@ -80,7 +92,7 @@ export class MandalsService {
   }
 
   async list(query: ListMandalsQueryDto) {
-    const where: Prisma.MandalWhereInput = {
+    const where: MandalListWhere = {
       status: query.status,
     };
 
@@ -196,7 +208,7 @@ export class MandalsService {
     };
   }
 
-  private toJson(value: unknown): Prisma.InputJsonValue {
-    return value as Prisma.InputJsonValue;
+  private toJson(value: unknown): JsonWriteValue {
+    return value as JsonWriteValue;
   }
 }

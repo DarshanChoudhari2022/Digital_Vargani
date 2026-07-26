@@ -1,9 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, SlipStatus } from '@prisma/client';
+import { PaymentMode, SlipStatus } from '@prisma/client';
 import { AuthContext } from '../auth/auth-context';
 import { assertSameMandal } from '../auth/tenant-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { CollectionReportQueryDto } from './dto/collection-report-query.dto';
+
+interface SlipReportWhere {
+  areaName?: string;
+  collectedByUserId?: string;
+  createdAt?: {
+    gte?: Date;
+    lte?: Date;
+  };
+  festivalId: string;
+  groupId?: string;
+  mandalId: string;
+  paymentMode?: PaymentMode;
+  status: SlipStatus;
+}
 
 @Injectable()
 export class ReportsService {
@@ -25,7 +39,7 @@ export class ReportsService {
           }
         : undefined;
 
-    const where: Prisma.VarganiSlipWhereInput = {
+    const where: SlipReportWhere = {
       areaName: query.areaName,
       collectedByUserId: query.memberId,
       createdAt,
@@ -103,7 +117,7 @@ export class ReportsService {
           }
         : undefined;
 
-    const where: Prisma.VarganiSlipWhereInput = {
+    const where: SlipReportWhere = {
       areaName: query.areaName,
       collectedByUserId: query.memberId,
       createdAt,
