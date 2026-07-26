@@ -3,9 +3,14 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { validateAppConfig } from './config/app-config';
 import { AuthModule } from './auth/auth.module';
+import { ExpensesModule } from './expenses/expenses.module';
+import { FestivalsModule } from './festivals/festivals.module';
 import { HealthModule } from './health/health.module';
 import { MandalsModule } from './mandals/mandals.module';
+import { MembersModule } from './members/members.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ReportsModule } from './reports/reports.module';
+import { VarganiModule } from './vargani/vargani.module';
 
 @Module({
   imports: [
@@ -24,6 +29,11 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     AuthModule,
     MandalsModule,
+    FestivalsModule,
+    MembersModule,
+    VarganiModule,
+    ExpensesModule,
+    ReportsModule,
     HealthModule,
   ],
 })

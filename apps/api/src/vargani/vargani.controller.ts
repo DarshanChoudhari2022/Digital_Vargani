@@ -1,0 +1,50 @@
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { AuthContext } from '../auth/auth-context';
+import { AuthUser } from '../auth/decorators/auth-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { CancelSlipDto } from './dto/cancel-slip.dto';
+import { CreateVarganiSlipDto } from './dto/create-vargani-slip.dto';
+import { VarganiService } from './vargani.service';
+
+@ApiTags('vargani')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('vargani')
+export class VarganiController {
+  constructor(private readonly varganiService: VarganiService) {}
+
+  @Get('active-form')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
+  getActiveForm(@AuthUser() ctx: AuthContext) {
+    return this.varganiService.getActiveForm(ctx);
+  }
+
+  @Post('slips')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
+  createSlip(@AuthUser() ctx: AuthContext, @Body() dto: CreateVarganiSlipDto) {
+    return this.varganiService.createSlip(ctx, dto);
+  }
+
+  @Get('slips')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
+  listSlips(@AuthUser() ctx: AuthContext, @Query() query: PaginationQueryDto) {
+    return this.varganiService.listSlips(ctx, query);
+  }
+
+  @Get('slips/:id')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
+  getSlip(@AuthUser() ctx: AuthContext, @Param('id') id: string) {
+    return this.varganiService.getSlip(ctx, id);
+  }
+
+  @Post('slips/:id/cancel')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR)
+  cancelSlip(@AuthUser() ctx: AuthContext, @Param('id') id: string, @Body() dto: CancelSlipDto) {
+    return this.varganiService.cancelSlip(ctx, id, dto);
+  }
+}
