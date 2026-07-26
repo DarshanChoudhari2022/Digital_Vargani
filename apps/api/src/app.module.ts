@@ -11,10 +11,12 @@ import { MandalsModule } from './mandals/mandals.module';
 import { MembersModule } from './members/members.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReportsModule } from './reports/reports.module';
+import { RootController } from './root.controller';
 import { TemplatesModule } from './templates/templates.module';
 import { VarganiModule } from './vargani/vargani.module';
 
 @Module({
+  controllers: [RootController],
   imports: [
     ConfigModule.forRoot({
       cache: true,

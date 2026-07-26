@@ -1,4 +1,4 @@
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { RequestMethod, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
@@ -27,7 +27,9 @@ async function bootstrapServer(): Promise<express.Express> {
   const globalPrefix = config.get('API_GLOBAL_PREFIX', { infer: true });
   const corsOrigins = config.get('CORS_ORIGINS', { infer: true });
 
-  app.setGlobalPrefix(globalPrefix);
+  app.setGlobalPrefix(globalPrefix, {
+    exclude: [{ method: RequestMethod.GET, path: '/' }],
+  });
   app.enableVersioning({
     defaultVersion: '1',
     type: VersioningType.URI,
