@@ -295,7 +295,7 @@ export class VarganiService {
       createdAt: new Intl.DateTimeFormat('en-IN').format(slip.createdAt),
       paymentMode: slip.paymentMode,
       shopName: slip.shopName ?? '',
-      slipNumber: slip.slipNumber.split('-').at(-1)?.replace(/^0+/, '') || slip.slipNumber,
+      slipNumber: lastSlipNumberPart(slip.slipNumber).replace(/^0+/, '') || slip.slipNumber,
     };
 
     for (const field of customFields) {
@@ -431,6 +431,11 @@ export class VarganiService {
 
 function toJsonWriteValue(value: unknown): JsonWriteValue {
   return value as JsonWriteValue;
+}
+
+function lastSlipNumberPart(slipNumber: string): string {
+  const parts = slipNumber.split('-');
+  return parts[parts.length - 1] ?? slipNumber;
 }
 
 function escapeHtml(value: string): string {

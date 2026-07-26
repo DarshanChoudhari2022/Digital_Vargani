@@ -505,7 +505,8 @@ async function main() {
     where: { festivalId: festival.id, mandalId: createdMandal.id },
   });
   const maxSlipNumber = slips.reduce((max, slip) => {
-    const suffix = Number(slip.slipNumber.split('-').at(-1) || 0);
+    const parts = slip.slipNumber.split('-');
+    const suffix = Number(parts[parts.length - 1] || 0);
     return Number.isFinite(suffix) ? Math.max(max, suffix) : max;
   }, 3);
 
