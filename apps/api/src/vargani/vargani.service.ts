@@ -7,7 +7,6 @@ import {
 import {
   CustomFieldType,
   FestivalStatus,
-  Prisma,
   RenderStatus,
   SlipStatus,
   UserRole,
@@ -22,6 +21,14 @@ import { CreateVarganiSlipDto } from './dto/create-vargani-slip.dto';
 
 interface SequenceRow {
   current_value: bigint;
+}
+
+type JsonWriteValue = never;
+
+interface SlipListWhere {
+  collectedByUserId?: string;
+  festivalId: string;
+  mandalId: string;
 }
 
 interface TemplateFieldPlacement {
@@ -115,7 +122,7 @@ export class VarganiService {
           contributorAddress: dto.contributorAddress,
           contributorName: dto.contributorName,
           contributorPhone: dto.contributorPhone,
-          customData: (dto.customData ?? {}) as Prisma.InputJsonValue,
+          customData: toJsonWriteValue(dto.customData ?? {}),
           festivalId: festival.id,
           groupId: member?.groupId,
           idempotencyKey: dto.idempotencyKey,
@@ -132,7 +139,7 @@ export class VarganiService {
       await tx.auditEvent.create({
         data: {
           action: 'created',
-          after: slip as unknown as Prisma.InputJsonValue,
+          after: toJsonWriteValue(slip),
           actorUserId: ctx.userId,
           entityId: slip.id,
           entityType: 'vargani_slip',
@@ -148,7 +155,7 @@ export class VarganiService {
     const mandalId = requireMandalId(ctx);
     const festival = await this.getActiveFestival(mandalId);
     const skip = (query.page - 1) * query.limit;
-    const where: Prisma.VarganiSlipWhereInput = {
+    const where: SlipListWhere = {
       festivalId: festival.id,
       mandalId,
     };
@@ -356,8 +363,8 @@ export class VarganiService {
         data: {
           action: 'cancelled',
           actorUserId: ctx.userId,
-          before: slip as unknown as Prisma.InputJsonValue,
-          after: updated as unknown as Prisma.InputJsonValue,
+          before: toJsonWriteValue(slip),
+          after: toJsonWriteValue(updated),
           entityId: id,
           entityType: 'vargani_slip',
           mandalId,
@@ -381,7 +388,10 @@ export class VarganiService {
   }
 
   private async nextSlipSequence(
-    tx: Prisma.TransactionClient,
+    tx: {
+      $executeRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
+      $queryRaw: <T = unknown>(query: TemplateStringsArray, ...values: unknown[]) => Promise<T>;
+    },
     mandalId: string,
     festivalId: string,
   ): Promise<number> {
@@ -417,6 +427,10 @@ export class VarganiService {
       }
     }
   }
+}
+
+function toJsonWriteValue(value: unknown): JsonWriteValue {
+  return value as JsonWriteValue;
 }
 
 function escapeHtml(value: string): string {
