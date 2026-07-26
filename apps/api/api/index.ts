@@ -19,6 +19,7 @@ async function bootstrapServer(): Promise<express.Express> {
   const { AppModule } = await import(appModulePath);
   const server = express();
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+    abortOnError: false,
     bufferLogs: true,
   });
 
@@ -63,6 +64,16 @@ export default async function handler(
   request: express.Request,
   response: express.Response,
 ): Promise<void> {
+  if (request.url === '/' || request.url?.startsWith('/favicon.')) {
+    response.status(200).json({
+      status: 'ok',
+      service: 'digital-mandal-api',
+      docs: '/api/docs',
+      health: '/api/v1/health',
+    });
+    return;
+  }
+
   try {
     const server = await bootstrapServer();
     server(request, response);

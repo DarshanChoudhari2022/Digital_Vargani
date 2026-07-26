@@ -12,12 +12,23 @@ export class HealthController {
     description: 'API and database health status.',
   })
   async getHealth() {
-    await this.prisma.$queryRaw`SELECT 1`;
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
 
-    return {
-      status: 'ok',
-      service: 'digital-mandal-api',
-      timestamp: new Date().toISOString(),
-    };
+      return {
+        status: 'ok',
+        database: 'ok',
+        service: 'digital-mandal-api',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        status: 'degraded',
+        database: 'error',
+        detail: error instanceof Error ? error.message : 'Unknown database error',
+        service: 'digital-mandal-api',
+        timestamp: new Date().toISOString(),
+      };
+    }
   }
 }
