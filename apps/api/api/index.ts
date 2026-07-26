@@ -6,7 +6,6 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
-import { AppModule } from '../src/app.module';
 import { AppConfig } from '../src/config/app-config';
 
 let cachedServer: express.Express | undefined;
@@ -16,6 +15,7 @@ async function bootstrapServer(): Promise<express.Express> {
     return cachedServer;
   }
 
+  const { AppModule } = await import('../src/app.module');
   const server = express();
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     bufferLogs: true,
@@ -69,6 +69,7 @@ export default async function handler(
     console.error(error);
     response.status(500).json({
       error: 'API_BOOTSTRAP_FAILED',
+      detail: error instanceof Error ? error.message : 'Unknown bootstrap error',
       message: 'Digital Mandal API could not start. Check Vercel environment variables and logs.',
     });
   }
