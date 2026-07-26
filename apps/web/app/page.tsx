@@ -17,7 +17,7 @@ import {
   Smartphone,
   Upload,
 } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, PointerEvent, useEffect, useMemo, useState } from 'react';
 import {
   API_BASE_URL,
   apiRequest,
@@ -33,6 +33,17 @@ import {
 
 type Role = 'super' | 'admin' | 'member';
 type UiState = 'idle' | 'loading' | 'saving';
+type TextAlign = 'center' | 'left' | 'right';
+
+interface TemplatePlacement {
+  color: string;
+  fontSize: number;
+  fontWeight: number;
+  textAlign: TextAlign;
+  width: number;
+  x: number;
+  y: number;
+}
 
 const sessionKey = 'digital-mandal-session-v1';
 
@@ -565,6 +576,11 @@ export default function Home() {
               onSubmit={createCustomField}
             />
             <TemplatePanel disabled={!session || !activeFestivalId} onSubmit={createTemplate} />
+            <VisualTemplateBuilder
+              customFields={customFields}
+              disabled={!session || !activeFestivalId}
+              onSubmit={createTemplate}
+            />
             <SlipList slips={slips} onSelect={setSelectedSlip} />
             <ReceiptPreview slip={selectedSlip} />
           </section>
@@ -915,7 +931,7 @@ function TemplatePanel({
       <div className="panel-heading">
         <div>
           <p>Template Engine</p>
-          <h2>Upload And Activate</h2>
+          <h2>JSON Template</h2>
         </div>
         <Upload size={20} />
       </div>
@@ -950,6 +966,362 @@ function TemplatePanel({
       </form>
     </div>
   );
+}
+
+function VisualTemplateBuilder({
+  customFields,
+  disabled,
+  onSubmit,
+}: {
+  customFields: CustomField[];
+  disabled: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const fieldOptions = useMemo(
+    () => [
+      { key: 'slipNumber', label: 'Slip Number' },
+      { key: 'createdAt', label: 'Date' },
+      { key: 'contributorName', label: 'Contributor Name' },
+      { key: 'contributorAddress', label: 'Address' },
+      { key: 'shopName', label: 'Shop Name' },
+      { key: 'areaName', label: 'Area' },
+      { key: 'amount', label: 'Amount' },
+      { key: 'paymentMode', label: 'Payment Mode' },
+      ...customFields.map((field) => ({ key: field.key, label: field.label })),
+    ],
+    [customFields],
+  );
+  const [backgroundFileUrl, setBackgroundFileUrl] = useState(
+    '/templates/akhilnayak-mitra-mandal-vargani.jpeg',
+  );
+  const [canvasWidth, setCanvasWidth] = useState(1328);
+  const [canvasHeight, setCanvasHeight] = useState(800);
+  const [activeField, setActiveField] = useState(fieldOptions[0]?.key ?? 'slipNumber');
+  const [placements, setPlacements] = useState<Record<string, TemplatePlacement>>({
+    amount: {
+      color: '#111111',
+      fontSize: 31,
+      fontWeight: 900,
+      textAlign: 'left',
+      width: 250,
+      x: 720,
+      y: 706,
+    },
+    building_name: {
+      color: '#111111',
+      fontSize: 24,
+      fontWeight: 700,
+      textAlign: 'left',
+      width: 420,
+      x: 715,
+      y: 648,
+    },
+    contributorAddress: {
+      color: '#111111',
+      fontSize: 27,
+      fontWeight: 800,
+      textAlign: 'left',
+      width: 560,
+      x: 715,
+      y: 612,
+    },
+    contributorName: {
+      color: '#111111',
+      fontSize: 30,
+      fontWeight: 900,
+      textAlign: 'left',
+      width: 610,
+      x: 670,
+      y: 544,
+    },
+    createdAt: {
+      color: '#111111',
+      fontSize: 25,
+      fontWeight: 800,
+      textAlign: 'center',
+      width: 160,
+      x: 1115,
+      y: 478,
+    },
+    slipNumber: {
+      color: '#b62028',
+      fontSize: 31,
+      fontWeight: 900,
+      textAlign: 'left',
+      width: 100,
+      x: 648,
+      y: 470,
+    },
+  });
+  const selectedPlacement = placements[activeField];
+  const renderConfig = useMemo(() => ({ fields: placements }), [placements]);
+
+  function placeField(event: PointerEvent<HTMLDivElement>) {
+    if (disabled) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.round(((event.clientX - rect.left) / rect.width) * canvasWidth);
+    const y = Math.round(((event.clientY - rect.top) / rect.height) * canvasHeight);
+    setPlacements((current) => ({
+      ...current,
+      [activeField]: {
+        color: current[activeField]?.color ?? '#111111',
+        fontSize: current[activeField]?.fontSize ?? 28,
+        fontWeight: current[activeField]?.fontWeight ?? 800,
+        textAlign: current[activeField]?.textAlign ?? 'left',
+        width: current[activeField]?.width ?? 280,
+        x,
+        y,
+      },
+    }));
+  }
+
+  function updatePlacement(partial: Partial<TemplatePlacement>) {
+    setPlacements((current) => ({
+      ...current,
+      [activeField]: {
+        ...defaultPlacement(),
+        ...current[activeField],
+        ...partial,
+      },
+    }));
+  }
+
+  function removePlacement() {
+    setPlacements((current) => {
+      const next = { ...current };
+      delete next[activeField];
+      return next;
+    });
+  }
+
+  return (
+    <div className="panel wide">
+      <div className="panel-heading">
+        <div>
+          <p>Visual Template Builder</p>
+          <h2>Place Slip Fields</h2>
+        </div>
+        <Upload size={20} />
+      </div>
+      <form className="template-builder" onSubmit={onSubmit}>
+        <div className="builder-controls">
+          <label>
+            Template name
+            <input
+              disabled={disabled}
+              name="name"
+              required
+              defaultValue="Akhilnayak Original Vargani Slip"
+            />
+          </label>
+          <label>
+            Background image URL
+            <input
+              disabled={disabled}
+              name="backgroundFileUrl"
+              required
+              value={backgroundFileUrl}
+              onChange={(event) => setBackgroundFileUrl(event.target.value)}
+            />
+          </label>
+          <div className="form-grid">
+            <label>
+              Canvas width
+              <input
+                disabled={disabled}
+                name="canvasWidth"
+                required
+                type="number"
+                value={canvasWidth}
+                onChange={(event) => setCanvasWidth(Number(event.target.value))}
+              />
+            </label>
+            <label>
+              Canvas height
+              <input
+                disabled={disabled}
+                name="canvasHeight"
+                required
+                type="number"
+                value={canvasHeight}
+                onChange={(event) => setCanvasHeight(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <label>
+            Active field
+            <select
+              disabled={disabled}
+              value={activeField}
+              onChange={(event) => setActiveField(event.target.value)}
+            >
+              {fieldOptions.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="form-grid">
+            <label>
+              X
+              <input
+                disabled={disabled}
+                type="number"
+                value={selectedPlacement?.x ?? 0}
+                onChange={(event) => updatePlacement({ x: Number(event.target.value) })}
+              />
+            </label>
+            <label>
+              Y
+              <input
+                disabled={disabled}
+                type="number"
+                value={selectedPlacement?.y ?? 0}
+                onChange={(event) => updatePlacement({ y: Number(event.target.value) })}
+              />
+            </label>
+            <label>
+              Width
+              <input
+                disabled={disabled}
+                type="number"
+                value={selectedPlacement?.width ?? 280}
+                onChange={(event) => updatePlacement({ width: Number(event.target.value) })}
+              />
+            </label>
+            <label>
+              Font size
+              <input
+                disabled={disabled}
+                type="number"
+                value={selectedPlacement?.fontSize ?? 28}
+                onChange={(event) => updatePlacement({ fontSize: Number(event.target.value) })}
+              />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Weight
+              <select
+                disabled={disabled}
+                value={selectedPlacement?.fontWeight ?? 800}
+                onChange={(event) => updatePlacement({ fontWeight: Number(event.target.value) })}
+              >
+                <option value={400}>Regular</option>
+                <option value={700}>Bold</option>
+                <option value={800}>Extra Bold</option>
+                <option value={900}>Black</option>
+              </select>
+            </label>
+            <label>
+              Align
+              <select
+                disabled={disabled}
+                value={selectedPlacement?.textAlign ?? 'left'}
+                onChange={(event) =>
+                  updatePlacement({ textAlign: event.target.value as TextAlign })
+                }
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Color
+            <input
+              disabled={disabled}
+              type="color"
+              value={selectedPlacement?.color ?? '#111111'}
+              onChange={(event) => updatePlacement({ color: event.target.value })}
+            />
+          </label>
+          <input name="renderConfig" type="hidden" value={JSON.stringify(renderConfig)} />
+          <div className="builder-actions">
+            <button className="primary" disabled={disabled} type="submit">
+              Activate Visual Template
+            </button>
+            <button
+              disabled={disabled || !selectedPlacement}
+              type="button"
+              onClick={removePlacement}
+            >
+              Remove Field
+            </button>
+          </div>
+        </div>
+        <div className="builder-canvas-wrap">
+          <div
+            className="builder-canvas"
+            onPointerDown={placeField}
+            style={{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }}
+          >
+            <img alt="" src={backgroundFileUrl} />
+            {Object.entries(placements).map(([key, placement]) => {
+              const field = fieldOptions.find((item) => item.key === key);
+              return (
+                <button
+                  className={`template-field ${activeField === key ? 'active' : ''}`}
+                  key={key}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    setActiveField(key);
+                  }}
+                  style={{
+                    color: placement.color,
+                    fontSize: `${placement.fontSize}px`,
+                    fontWeight: placement.fontWeight,
+                    left: `${(placement.x / canvasWidth) * 100}%`,
+                    textAlign: placement.textAlign,
+                    top: `${(placement.y / canvasHeight) * 100}%`,
+                    width: `${(placement.width / canvasWidth) * 100}%`,
+                  }}
+                  type="button"
+                >
+                  {sampleFieldValue(key, field?.label ?? key)}
+                </button>
+              );
+            })}
+          </div>
+          <div className="field-map">
+            {Object.keys(placements).map((key) => (
+              <span key={key}>{fieldOptions.find((field) => field.key === key)?.label ?? key}</span>
+            ))}
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function defaultPlacement(): TemplatePlacement {
+  return {
+    color: '#111111',
+    fontSize: 28,
+    fontWeight: 800,
+    textAlign: 'left',
+    width: 280,
+    x: 120,
+    y: 120,
+  };
+}
+
+function sampleFieldValue(key: string, label: string) {
+  const samples: Record<string, string> = {
+    amount: '5100',
+    areaName: 'Ramtekdi',
+    building_name: 'Prathama Building',
+    contributorAddress: 'Ramtekdi, Pune',
+    contributorName: 'Mahesh Traders',
+    createdAt: '26/07/2026',
+    paymentMode: 'UPI',
+    shopName: 'Mahesh Traders',
+    slipNumber: '003',
+  };
+
+  return samples[key] ?? label;
 }
 
 function SlipForm({

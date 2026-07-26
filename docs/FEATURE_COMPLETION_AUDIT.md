@@ -32,6 +32,7 @@ Status as of the current implementation.
   - festival creation and activation
   - custom vargani field creation
   - template version creation and activation
+  - visual template builder with image preview, field selection, click placement, coordinate editing, font controls, alignment controls, and generated render JSON
   - member vargani slip generation
   - collection report refresh and CSV download
 - Supabase public schema pushed and verified with all expected tables:
@@ -62,7 +63,7 @@ pnpm test
 
 ## Partial / Not Yet Production Complete
 
-- Drag/drop visual template field placement is not implemented yet; template activation currently accepts render JSON and a background URL.
+- Template builder now supports visual field placement; true file upload to object storage is still pending, so background images currently use URLs or committed demo assets.
 - PDF/image receipt rendering worker is not implemented yet; printable server-rendered receipt HTML is implemented.
 - Queue/Redis worker integration for receipt rendering and exports is not implemented yet.
 - File storage upload to S3/Supabase Storage is not implemented yet.
@@ -73,7 +74,7 @@ pnpm test
 ## Next Required Production Milestones
 
 1. Seed the first super admin and demo mandal credentials.
-2. Build live drag/drop template upload and field placement UI on top of the template APIs.
+2. Build file upload/object storage for template images and bills.
 3. Build PDF/image receipt rendering worker.
 4. Add integration/concurrency tests for slip creation.
-5. Add storage, queues, observability, and deployment config.
+5. Add storage queues, observability, and deployment config.

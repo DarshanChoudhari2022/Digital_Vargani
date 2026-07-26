@@ -552,11 +552,76 @@ dd {
   padding: 10px;
 }
 
+.template-builder {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+}
+
+.builder-controls,
+.builder-canvas-wrap {
+  display: grid;
+  gap: 14px;
+}
+
+.builder-actions {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto;
+}
+
+.builder-actions button:not(.primary) {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 10px 14px;
+}
+
+.builder-canvas {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: crosshair;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.builder-canvas img {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+}
+
+.template-field {
+  background: rgba(255, 251, 230, 0.7);
+  border: 1px dashed rgba(127, 29, 29, 0.65);
+  border-radius: 4px;
+  min-height: 26px;
+  overflow: hidden;
+  padding: 0 4px;
+  position: absolute;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.template-field.active {
+  background: rgba(255, 242, 216, 0.92);
+  border: 2px solid var(--maroon);
+  box-shadow: 0 0 0 3px rgba(127, 29, 29, 0.13);
+}
+
 @media (max-width: 1100px) {
   .shell,
   .two-column,
   .dashboard-grid,
-  .metrics-grid {
+  .metrics-grid,
+  .template-builder {
     grid-template-columns: 1fr;
   }
 
