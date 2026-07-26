@@ -19,6 +19,34 @@ interface SlipReportWhere {
   status: SlipStatus;
 }
 
+interface SqlWhere {
+  clause: string;
+  params: Array<Date | PaymentMode | SlipStatus | string>;
+}
+
+interface SummaryRow {
+  amount: number | string | null;
+  count: number;
+}
+
+interface MemberSummaryRow {
+  amount: number | string | null;
+  collectedByUserId: string;
+  count: number;
+}
+
+interface GroupSummaryRow {
+  amount: number | string | null;
+  count: number;
+  groupId: string | null;
+}
+
+interface PaymentModeSummaryRow {
+  amount: number | string | null;
+  count: number;
+  paymentMode: PaymentMode;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -50,52 +78,67 @@ export class ReportsService {
       status: SlipStatus.ACTIVE,
     };
 
-    const [summary, byMember, byGroup, byPaymentMode, expenses] = await this.prisma.$transaction([
-      this.prisma.varganiSlip.aggregate({
-        _count: { id: true },
-        _sum: { amount: true },
-        where,
-      }),
-      this.prisma.varganiSlip.groupBy({
-        _count: { id: true },
-        _sum: { amount: true },
-        by: ['collectedByUserId'],
-        orderBy: { collectedByUserId: 'asc' },
-        where,
-      }),
-      this.prisma.varganiSlip.groupBy({
-        _count: { id: true },
-        _sum: { amount: true },
-        by: ['groupId'],
-        orderBy: { groupId: 'asc' },
-        where,
-      }),
-      this.prisma.varganiSlip.groupBy({
-        _count: { id: true },
-        _sum: { amount: true },
-        by: ['paymentMode'],
-        orderBy: { paymentMode: 'asc' },
-        where,
-      }),
-      this.prisma.expense.aggregate({
-        _sum: { amount: true },
-        where: {
-          festivalId,
+    const slipWhere = buildSlipSqlWhere(where);
+    const [summaryRows, byMemberRows, byGroupRows, byPaymentModeRows, expenseRows] =
+      await Promise.all([
+        this.prisma.$queryRawUnsafe<SummaryRow[]>(
+          `SELECT COUNT(*)::int AS "count", COALESCE(SUM("amount"), 0)::text AS "amount"
+           FROM "vargani_slips"
+           WHERE ${slipWhere.clause}`,
+          ...slipWhere.params,
+        ),
+        this.prisma.$queryRawUnsafe<MemberSummaryRow[]>(
+          `SELECT "collected_by_user_id" AS "collectedByUserId",
+                  COUNT(*)::int AS "count",
+                  COALESCE(SUM("amount"), 0)::text AS "amount"
+           FROM "vargani_slips"
+           WHERE ${slipWhere.clause}
+           GROUP BY "collected_by_user_id"
+           ORDER BY "collected_by_user_id" ASC`,
+          ...slipWhere.params,
+        ),
+        this.prisma.$queryRawUnsafe<GroupSummaryRow[]>(
+          `SELECT "group_id" AS "groupId",
+                  COUNT(*)::int AS "count",
+                  COALESCE(SUM("amount"), 0)::text AS "amount"
+           FROM "vargani_slips"
+           WHERE ${slipWhere.clause}
+           GROUP BY "group_id"
+           ORDER BY "group_id" ASC NULLS LAST`,
+          ...slipWhere.params,
+        ),
+        this.prisma.$queryRawUnsafe<PaymentModeSummaryRow[]>(
+          `SELECT "payment_mode" AS "paymentMode",
+                  COUNT(*)::int AS "count",
+                  COALESCE(SUM("amount"), 0)::text AS "amount"
+           FROM "vargani_slips"
+           WHERE ${slipWhere.clause}
+           GROUP BY "payment_mode"
+           ORDER BY "payment_mode" ASC`,
+          ...slipWhere.params,
+        ),
+        this.prisma.$queryRawUnsafe<SummaryRow[]>(
+          `SELECT COUNT(*)::int AS "count", COALESCE(SUM("amount"), 0)::text AS "amount"
+           FROM "expenses"
+           WHERE "mandal_id" = $1::uuid
+             AND "festival_id" = $2::uuid
+             AND "status" = 'APPROVED'`,
           mandalId,
-          status: 'APPROVED',
-        },
-      }),
-    ]);
+          festivalId,
+        ),
+      ]);
 
-    const totalCollection = Number(summary._sum.amount ?? 0);
-    const totalExpenses = Number(expenses._sum.amount ?? 0);
+    const summary = summaryRows[0] ?? { amount: 0, count: 0 };
+    const expenses = expenseRows[0] ?? { amount: 0, count: 0 };
+    const totalCollection = Number(summary.amount ?? 0);
+    const totalExpenses = Number(expenses.amount ?? 0);
 
     return {
       balance: totalCollection - totalExpenses,
-      byGroup,
-      byMember,
-      byPaymentMode,
-      slipCount: summary._count.id,
+      byGroup: byGroupRows.map(toGroupSummary),
+      byMember: byMemberRows.map(toMemberSummary),
+      byPaymentMode: byPaymentModeRows.map(toPaymentModeSummary),
+      slipCount: summary.count,
       totalCollection,
       totalExpenses,
     };
@@ -183,4 +226,68 @@ export function csvCell(value: string | number): string {
   }
 
   return text;
+}
+
+function buildSlipSqlWhere(where: SlipReportWhere): SqlWhere {
+  const params: SqlWhere['params'] = [];
+  const conditions: string[] = [];
+
+  addCondition(conditions, params, '"mandal_id" = $n::uuid', where.mandalId);
+  addCondition(conditions, params, '"festival_id" = $n::uuid', where.festivalId);
+  addCondition(conditions, params, '"status" = $n::"SlipStatus"', where.status);
+  addCondition(conditions, params, '"area_name" = $n', where.areaName);
+  addCondition(conditions, params, '"collected_by_user_id" = $n::uuid', where.collectedByUserId);
+  addCondition(conditions, params, '"group_id" = $n::uuid', where.groupId);
+  addCondition(conditions, params, '"payment_mode" = $n::"PaymentMode"', where.paymentMode);
+
+  if (where.createdAt?.gte) {
+    addCondition(conditions, params, '"created_at" >= $n', where.createdAt.gte);
+  }
+
+  if (where.createdAt?.lte) {
+    addCondition(conditions, params, '"created_at" <= $n', where.createdAt.lte);
+  }
+
+  return {
+    clause: conditions.join(' AND '),
+    params,
+  };
+}
+
+function addCondition(
+  conditions: string[],
+  params: SqlWhere['params'],
+  template: string,
+  value?: Date | PaymentMode | SlipStatus | string,
+): void {
+  if (value === undefined || value === '') {
+    return;
+  }
+
+  params.push(value);
+  conditions.push(template.replace('$n', `$${params.length}`));
+}
+
+function toMemberSummary(row: MemberSummaryRow) {
+  return {
+    _count: { id: row.count },
+    _sum: { amount: row.amount },
+    collectedByUserId: row.collectedByUserId,
+  };
+}
+
+function toGroupSummary(row: GroupSummaryRow) {
+  return {
+    _count: { id: row.count },
+    _sum: { amount: row.amount },
+    groupId: row.groupId,
+  };
+}
+
+function toPaymentModeSummary(row: PaymentModeSummaryRow) {
+  return {
+    _count: { id: row.count },
+    _sum: { amount: row.amount },
+    paymentMode: row.paymentMode,
+  };
 }
