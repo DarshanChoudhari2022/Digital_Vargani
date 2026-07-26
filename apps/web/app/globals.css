@@ -32,7 +32,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -241,13 +242,27 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--ink);
   min-height: 44px;
   padding: 10px 12px;
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .full,
@@ -292,6 +307,42 @@ td span {
   display: block;
   font-size: 13px;
   margin-top: 3px;
+}
+
+.selected-row {
+  background: #fff7e6;
+}
+
+.notice {
+  background: #eef8f4;
+  border: 1px solid #b6e2d0;
+  border-radius: 8px;
+  color: #075a40;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 14px;
+}
+
+.notice.busy {
+  background: #fff3d0;
+  border-color: #e9cc82;
+  color: #704800;
+}
+
+.compact {
+  margin-bottom: 14px;
+}
+
+.checkline {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.checkline input {
+  min-height: 18px;
+  width: 18px;
 }
 
 .status {

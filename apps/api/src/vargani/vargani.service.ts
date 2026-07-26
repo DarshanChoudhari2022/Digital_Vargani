@@ -177,6 +177,77 @@ export class VarganiService {
     return slip;
   }
 
+  async renderReceiptHtml(ctx: AuthContext, id: string) {
+    const slip = await this.getSlip(ctx, id);
+    const customFields = await this.prisma.customField.findMany({
+      orderBy: { sortOrder: 'asc' },
+      where: { festivalId: slip.festivalId, mandalId: slip.mandalId, printOnSlip: true },
+    });
+    const customData =
+      slip.customData && typeof slip.customData === 'object' && !Array.isArray(slip.customData)
+        ? (slip.customData as Record<string, unknown>)
+        : {};
+
+    const customRows = customFields
+      .map((field) => {
+        const value = customData[field.key];
+        if (value === undefined || value === null || value === '') {
+          return '';
+        }
+
+        return `<div><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(String(value))}</dd></div>`;
+      })
+      .join('');
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(slip.slipNumber)} - Digital Vargani Receipt</title>
+  <style>
+    body { background: #f5f1e8; color: #171717; font-family: Arial, sans-serif; margin: 0; padding: 24px; }
+    .receipt { background: #fffdf8; border: 2px solid #7f1d1d; border-radius: 8px; margin: 0 auto; max-width: 760px; padding: 28px; }
+    .top { align-items: center; display: flex; justify-content: space-between; gap: 16px; }
+    h1, p { margin: 0; }
+    h1 { color: #7f1d1d; font-size: 28px; }
+    .number { background: #fff2d8; border: 1px dashed #a94b2b; border-radius: 8px; font-size: 20px; font-weight: 800; margin: 22px 0; padding: 14px; text-align: center; }
+    dl { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+    dl div { border-bottom: 1px solid #ead7b3; padding-bottom: 10px; }
+    dt { color: #6a655d; font-size: 12px; text-transform: uppercase; }
+    dd { font-size: 17px; font-weight: 700; margin: 3px 0 0; }
+    .amount { align-items: center; background: #7f1d1d; border-radius: 8px; color: #fff; display: flex; justify-content: space-between; margin-top: 22px; padding: 16px; }
+    .amount strong { font-size: 32px; }
+    .footer { border-top: 1px solid #ead7b3; color: #0f8b63; display: flex; justify-content: space-between; margin-top: 22px; padding-top: 14px; }
+    @media print { body { background: #fff; padding: 0; } .receipt { border-radius: 0; max-width: none; } }
+  </style>
+</head>
+<body>
+  <main class="receipt">
+    <section class="top">
+      <div>
+        <h1>${escapeHtml(slip.festival.name)}</h1>
+        <p>Digital Vargani Receipt</p>
+      </div>
+      <strong>${escapeHtml(slip.festival.type)}</strong>
+    </section>
+    <div class="number">${escapeHtml(slip.slipNumber)}</div>
+    <dl>
+      <div><dt>Name</dt><dd>${escapeHtml(slip.contributorName)}</dd></div>
+      <div><dt>Shop</dt><dd>${escapeHtml(slip.shopName ?? '-')}</dd></div>
+      <div><dt>Phone</dt><dd>${escapeHtml(slip.contributorPhone ?? '-')}</dd></div>
+      <div><dt>Area</dt><dd>${escapeHtml(slip.areaName ?? '-')}</dd></div>
+      <div><dt>Payment</dt><dd>${escapeHtml(slip.paymentMode)}</dd></div>
+      <div><dt>Collected By</dt><dd>${escapeHtml(slip.collector.name)}</dd></div>
+      ${customRows}
+    </dl>
+    <section class="amount"><span>Amount Received</span><strong>Rs. ${Number(slip.amount).toLocaleString('en-IN')}</strong></section>
+    <section class="footer"><span>${escapeHtml(slip.createdAt.toISOString())}</span><strong>Verified Digital Slip</strong></section>
+  </main>
+</body>
+</html>`;
+  }
+
   async cancelSlip(ctx: AuthContext, id: string, dto: CancelSlipDto) {
     const mandalId = requireMandalId(ctx);
     const slip = await this.prisma.varganiSlip.findFirst({ where: { id, mandalId } });
@@ -260,4 +331,13 @@ export class VarganiService {
       }
     }
   }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }

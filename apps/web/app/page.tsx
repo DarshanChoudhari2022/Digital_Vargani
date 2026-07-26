@@ -2,7 +2,6 @@
 
 import {
   BadgeIndianRupee,
-  Banknote,
   CalendarDays,
   CheckCircle2,
   CircleGauge,
@@ -14,218 +13,431 @@ import {
   Plus,
   Printer,
   ReceiptText,
-  Search,
   ShieldCheck,
   Smartphone,
-  WalletCards,
+  Upload,
 } from 'lucide-react';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import {
+  API_BASE_URL,
+  apiRequest,
+  AuthSession,
+  CollectionReport,
+  CustomField,
+  downloadCsv,
+  Festival,
+  Mandal,
+  PaymentMode,
+  VarganiSlip,
+} from './lib/api/client';
 
 type Role = 'super' | 'admin' | 'member';
-type PaymentMode = 'Cash' | 'UPI' | 'Cheque' | 'Bank Transfer';
+type UiState = 'idle' | 'loading' | 'saving';
 
-interface Mandal {
-  id: string;
-  name: string;
-  locality: string;
-  city: string;
-  admin: string;
-  members: number;
-  status: 'Active' | 'Setup';
-}
+const sessionKey = 'digital-mandal-session-v1';
 
-interface Slip {
-  id: string;
-  number: string;
-  contributorName: string;
-  shopName: string;
-  area: string;
-  amount: number;
-  paymentMode: PaymentMode;
-  collectedBy: string;
-  group: string;
-  createdAt: string;
-  mobile: string;
-  notes: string;
-}
-
-interface Expense {
-  id: string;
-  category: string;
-  vendor: string;
-  amount: number;
-  status: 'Approved' | 'Submitted';
-}
-
-const initialMandals: Mandal[] = [
+const demoSlips: VarganiSlip[] = [
   {
-    id: 'M-1001',
-    name: 'Pune Ganpati Utsav Demo Mandal',
-    locality: 'Budhwar Peth',
-    city: 'Pune',
-    admin: 'Amit Kulkarni',
-    members: 186,
-    status: 'Active',
-  },
-  {
-    id: 'M-1002',
-    name: 'Shivneri Dahi Handi Mandal',
-    locality: 'Kothrud',
-    city: 'Pune',
-    admin: 'Rahul Shinde',
-    members: 74,
-    status: 'Setup',
-  },
-];
-
-const initialSlips: Slip[] = [
-  {
-    id: 'S-1',
-    number: 'DM-GNP-2026-000431',
-    contributorName: 'Mahesh Traders',
-    shopName: 'Mahesh Traders',
-    area: 'Laxmi Road',
     amount: 5100,
+    areaName: 'Laxmi Road',
+    contributorName: 'Mahesh Traders',
+    contributorPhone: '9876543210',
+    createdAt: '2026-07-26T05:12:00.000Z',
+    id: 'demo-1',
     paymentMode: 'UPI',
-    collectedBy: 'Sagar Jadhav',
-    group: 'Market Area',
-    createdAt: '26 Jul 2026, 10:42 AM',
-    mobile: '9876543210',
-    notes: 'Annual sponsor',
+    shopName: 'Mahesh Traders',
+    slipNumber: 'DM-GAN-2026-000431',
   },
   {
-    id: 'S-2',
-    number: 'DM-GNP-2026-000432',
-    contributorName: 'Joshi Family',
-    shopName: '',
-    area: 'Budhwar Peth Lane 3',
     amount: 1101,
-    paymentMode: 'Cash',
-    collectedBy: 'Neha Pawar',
-    group: 'Society Area',
-    createdAt: '26 Jul 2026, 11:05 AM',
-    mobile: '9822211122',
-    notes: 'Home collection',
-  },
-  {
-    id: 'S-3',
-    number: 'DM-GNP-2026-000433',
-    contributorName: 'Omkar Electricals',
-    shopName: 'Omkar Electricals',
-    area: 'Appa Balwant Chowk',
-    amount: 2501,
-    paymentMode: 'Cash',
-    collectedBy: 'Sagar Jadhav',
-    group: 'Market Area',
-    createdAt: '26 Jul 2026, 11:19 AM',
-    mobile: '9888888888',
-    notes: 'Lighting vendor contact',
+    areaName: 'Budhwar Peth Lane 3',
+    contributorName: 'Joshi Family',
+    contributorPhone: '9822211122',
+    createdAt: '2026-07-26T05:35:00.000Z',
+    id: 'demo-2',
+    paymentMode: 'CASH',
+    shopName: '',
+    slipNumber: 'DM-GAN-2026-000432',
   },
 ];
-
-const initialExpenses: Expense[] = [
-  {
-    id: 'E-1',
-    category: 'Decoration',
-    vendor: 'Shree Decorators',
-    amount: 42000,
-    status: 'Approved',
-  },
-  { id: 'E-2', category: 'Sound', vendor: 'Sai Audio', amount: 18000, status: 'Approved' },
-  { id: 'E-3', category: 'Permissions', vendor: 'PMC Desk', amount: 7500, status: 'Submitted' },
-];
-
-const groups = ['Market Area', 'Society Area', 'Temple Road', 'Station Road'];
-const members = ['Sagar Jadhav', 'Neha Pawar', 'Amit Kulkarni', 'Prachi More'];
 
 export default function Home() {
   const [role, setRole] = useState<Role>('super');
-  const [mandals, setMandals] = useState<Mandal[]>(initialMandals);
-  const [slips, setSlips] = useState<Slip[]>(initialSlips);
-  const [expenses] = useState<Expense[]>(initialExpenses);
-  const [selectedSlip, setSelectedSlip] = useState<Slip>(initialSlips[0]);
-  const [mandalName, setMandalName] = useState('');
-  const [areaSearch, setAreaSearch] = useState('');
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [status, setStatus] = useState<UiState>('idle');
+  const [notice, setNotice] = useState(
+    'Demo mode is ready. Login to use live Supabase-backed data.',
+  );
+  const [mandals, setMandals] = useState<Mandal[]>([]);
+  const [festivals, setFestivals] = useState<Festival[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [slips, setSlips] = useState<VarganiSlip[]>(demoSlips);
+  const [report, setReport] = useState<CollectionReport | null>(null);
+  const [selectedMandalId, setSelectedMandalId] = useState('');
+  const [selectedFestivalId, setSelectedFestivalId] = useState('');
+  const [selectedSlip, setSelectedSlip] = useState<VarganiSlip>(demoSlips[0]);
 
-  const totalCollection = slips.reduce((sum, slip) => sum + slip.amount, 0);
-  const approvedExpenses = expenses
-    .filter((expense) => expense.status === 'Approved')
-    .reduce((sum, expense) => sum + expense.amount, 0);
-  const cashTotal = slips
-    .filter((slip) => slip.paymentMode === 'Cash')
-    .reduce((sum, slip) => sum + slip.amount, 0);
+  const isLive = Boolean(session);
+  const activeMandalId = selectedMandalId || session?.user.mandalId || '';
+  const activeFestivalId = selectedFestivalId || festivals[0]?.id || '';
 
-  const memberTotals = useMemo(() => {
-    return members.map((member) => ({
-      member,
-      total: slips
-        .filter((slip) => slip.collectedBy === member)
-        .reduce((sum, slip) => sum + slip.amount, 0),
-    }));
-  }, [slips]);
+  const totalCollection = useMemo(
+    () => slips.reduce((sum, slip) => sum + Number(slip.amount), 0),
+    [slips],
+  );
+  const cashTotal = useMemo(
+    () =>
+      slips
+        .filter((slip) => slip.paymentMode === 'CASH')
+        .reduce((sum, slip) => sum + Number(slip.amount), 0),
+    [slips],
+  );
 
-  function createMandal(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const name = mandalName.trim();
+  useEffect(() => {
+    const stored = window.localStorage.getItem(sessionKey);
+    if (stored) {
+      const parsed = JSON.parse(stored) as AuthSession;
+      setSession(parsed);
+      setRole(
+        parsed.user.role === 'SUPER_ADMIN'
+          ? 'super'
+          : parsed.user.role === 'MEMBER'
+            ? 'member'
+            : 'admin',
+      );
+    }
+  }, []);
 
-    if (!name) {
+  useEffect(() => {
+    if (!session) {
       return;
     }
 
-    setMandals((current) => [
-      {
-        id: `M-${1000 + current.length + 1}`,
-        name,
-        locality: 'Pune',
-        city: 'Pune',
-        admin: 'New Mandal Admin',
-        members: 0,
-        status: 'Setup',
-      },
-      ...current,
-    ]);
-    setMandalName('');
+    void refreshWorkspace(session);
+  }, [session]);
+
+  async function refreshWorkspace(currentSession = session) {
+    if (!currentSession) {
+      return;
+    }
+
+    setStatus('loading');
+    try {
+      if (currentSession.user.role === 'SUPER_ADMIN') {
+        const response = await apiRequest<{ items: Mandal[] }>(
+          '/mandals?limit=50',
+          {},
+          currentSession,
+        );
+        setMandals(response.items);
+        setSelectedMandalId((current) => current || response.items[0]?.id || '');
+      } else if (currentSession.user.mandalId) {
+        setSelectedMandalId(currentSession.user.mandalId);
+        const festivalList = await apiRequest<Festival[]>(
+          `/mandals/${currentSession.user.mandalId}/festivals`,
+          {},
+          currentSession,
+        );
+        setFestivals(festivalList);
+        setSelectedFestivalId((current) => current || festivalList[0]?.id || '');
+        await refreshActiveForm(currentSession);
+        await refreshSlips(currentSession);
+      }
+      setNotice('Live data loaded from the API.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not load live workspace.');
+    } finally {
+      setStatus('idle');
+    }
   }
 
-  function generateSlip(event: FormEvent<HTMLFormElement>) {
+  async function refreshActiveForm(currentSession = session) {
+    if (!currentSession || currentSession.user.role === 'SUPER_ADMIN') {
+      return;
+    }
+
+    const form = await apiRequest<{ customFields: CustomField[]; festival: Festival }>(
+      '/vargani/active-form',
+      {},
+      currentSession,
+    );
+    setCustomFields(form.customFields);
+    setSelectedFestivalId(form.festival.id);
+  }
+
+  async function refreshSlips(currentSession = session) {
+    if (!currentSession || currentSession.user.role === 'SUPER_ADMIN') {
+      return;
+    }
+
+    const response = await apiRequest<{ items: VarganiSlip[] }>(
+      '/vargani/slips?limit=25',
+      {},
+      currentSession,
+    );
+    setSlips(response.items.length ? response.items : demoSlips);
+    setSelectedSlip(response.items[0] ?? demoSlips[0]);
+  }
+
+  async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const amount = Number(form.get('amount') || 0);
-
-    if (amount <= 0) {
-      return;
+    setStatus('saving');
+    try {
+      const nextSession = await apiRequest<AuthSession>('/auth/login', {
+        body: JSON.stringify({
+          identifier: String(form.get('identifier')),
+          password: String(form.get('password')),
+        }),
+        method: 'POST',
+      });
+      window.localStorage.setItem(sessionKey, JSON.stringify(nextSession));
+      setSession(nextSession);
+      setRole(
+        nextSession.user.role === 'SUPER_ADMIN'
+          ? 'super'
+          : nextSession.user.role === 'MEMBER'
+            ? 'member'
+            : 'admin',
+      );
+      setNotice(`Logged in as ${nextSession.user.name}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Login failed.');
+    } finally {
+      setStatus('idle');
     }
-
-    const nextNumber = `DM-GNP-2026-${String(434 + slips.length).padStart(6, '0')}`;
-    const slip: Slip = {
-      id: crypto.randomUUID(),
-      number: nextNumber,
-      contributorName: String(form.get('contributorName') || ''),
-      shopName: String(form.get('shopName') || ''),
-      area: String(form.get('area') || ''),
-      amount,
-      paymentMode: String(form.get('paymentMode') || 'Cash') as PaymentMode,
-      collectedBy: String(form.get('collectedBy') || members[0]),
-      group: String(form.get('group') || groups[0]),
-      createdAt: new Intl.DateTimeFormat('en-IN', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(new Date()),
-      mobile: String(form.get('mobile') || ''),
-      notes: String(form.get('notes') || ''),
-    };
-
-    setSlips((current) => [slip, ...current]);
-    setSelectedSlip(slip);
-    event.currentTarget.reset();
   }
 
-  const filteredSlips = slips.filter((slip) =>
-    [slip.area, slip.contributorName, slip.shopName, slip.collectedBy]
-      .join(' ')
-      .toLowerCase()
-      .includes(areaSearch.toLowerCase()),
-  );
+  async function logout() {
+    if (session) {
+      await apiRequest('/auth/logout', { method: 'POST' }, session).catch(() => undefined);
+    }
+    window.localStorage.removeItem(sessionKey);
+    setSession(null);
+    setMandals([]);
+    setFestivals([]);
+    setCustomFields([]);
+    setSlips(demoSlips);
+    setSelectedSlip(demoSlips[0]);
+    setNotice('Logged out. Demo data is visible.');
+  }
+
+  async function createMandal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session) return;
+    const form = new FormData(event.currentTarget);
+    setStatus('saving');
+    try {
+      await apiRequest(
+        '/mandals',
+        {
+          body: JSON.stringify({
+            admin: {
+              email: String(form.get('adminEmail')),
+              name: String(form.get('adminName')),
+              password: String(form.get('adminPassword')),
+              phone: String(form.get('adminPhone')),
+            },
+            city: String(form.get('city')),
+            contactName: String(form.get('adminName')),
+            contactPhone: String(form.get('adminPhone')),
+            locality: String(form.get('locality')),
+            name: String(form.get('name')),
+            state: 'Maharashtra',
+          }),
+          method: 'POST',
+        },
+        session,
+      );
+      event.currentTarget.reset();
+      await refreshWorkspace();
+      setNotice('Mandal account created with admin login.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not create mandal.');
+    } finally {
+      setStatus('idle');
+    }
+  }
+
+  async function createFestival(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session || !activeMandalId) return;
+    const form = new FormData(event.currentTarget);
+    setStatus('saving');
+    try {
+      const festival = await apiRequest<Festival>(
+        `/mandals/${activeMandalId}/festivals`,
+        {
+          body: JSON.stringify({
+            endDate: String(form.get('endDate')),
+            name: String(form.get('name')),
+            startDate: String(form.get('startDate')),
+            targetAmount: Number(form.get('targetAmount') || 0),
+            type: String(form.get('type')),
+          }),
+          method: 'POST',
+        },
+        session,
+      );
+      await apiRequest(
+        `/mandals/${activeMandalId}/festivals/${festival.id}/status`,
+        { body: JSON.stringify({ status: 'ACTIVE' }), method: 'PATCH' },
+        session,
+      );
+      event.currentTarget.reset();
+      await refreshWorkspace();
+      setNotice('Festival created and activated.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not create festival.');
+    } finally {
+      setStatus('idle');
+    }
+  }
+
+  async function createCustomField(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session || !activeMandalId || !activeFestivalId) return;
+    const form = new FormData(event.currentTarget);
+    setStatus('saving');
+    try {
+      await apiRequest(
+        `/mandals/${activeMandalId}/festivals/${activeFestivalId}/custom-fields`,
+        {
+          body: JSON.stringify({
+            dashboardFilter: Boolean(form.get('dashboardFilter')),
+            label: String(form.get('label')),
+            options: String(form.get('options') || '')
+              .split(',')
+              .map((option) => option.trim())
+              .filter(Boolean),
+            printOnSlip: true,
+            required: Boolean(form.get('required')),
+            type: String(form.get('type')),
+          }),
+          method: 'POST',
+        },
+        session,
+      );
+      event.currentTarget.reset();
+      await refreshActiveForm();
+      setNotice('Custom field added to the active vargani form.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not create custom field.');
+    } finally {
+      setStatus('idle');
+    }
+  }
+
+  async function createTemplate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session || !activeMandalId || !activeFestivalId) return;
+    const form = new FormData(event.currentTarget);
+    setStatus('saving');
+    try {
+      const template = await apiRequest<{ id: string }>(
+        `/mandals/${activeMandalId}/festivals/${activeFestivalId}/templates`,
+        {
+          body: JSON.stringify({ name: String(form.get('name')) }),
+          method: 'POST',
+        },
+        session,
+      );
+      const version = await apiRequest<{ id: string }>(
+        `/mandals/${activeMandalId}/festivals/${activeFestivalId}/templates/${template.id}/versions`,
+        {
+          body: JSON.stringify({
+            backgroundFileUrl: String(form.get('backgroundFileUrl')),
+            canvasHeight: Number(form.get('canvasHeight') || 1754),
+            canvasWidth: Number(form.get('canvasWidth') || 1240),
+            renderConfig: JSON.parse(String(form.get('renderConfig') || '{"fields":{}}')),
+          }),
+          method: 'POST',
+        },
+        session,
+      );
+      await apiRequest(
+        `/mandals/${activeMandalId}/festivals/${activeFestivalId}/templates/${template.id}/versions/${version.id}/activate`,
+        { method: 'PATCH' },
+        session,
+      );
+      event.currentTarget.reset();
+      setNotice('Template version uploaded and activated.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not create template.');
+    } finally {
+      setStatus('idle');
+    }
+  }
+
+  async function generateSlip(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session) return;
+    const form = new FormData(event.currentTarget);
+    setStatus('saving');
+    try {
+      const customData = Object.fromEntries(
+        customFields.map((field) => [field.key, String(form.get(`custom_${field.key}`) || '')]),
+      );
+      const slip = await apiRequest<VarganiSlip>(
+        '/vargani/slips',
+        {
+          body: JSON.stringify({
+            amount: Number(form.get('amount')),
+            areaName: String(form.get('areaName')),
+            contributorAddress: String(form.get('contributorAddress')),
+            contributorName: String(form.get('contributorName')),
+            contributorPhone: String(form.get('contributorPhone')),
+            customData,
+            idempotencyKey: crypto.randomUUID(),
+            paymentMode: String(form.get('paymentMode')) as PaymentMode,
+            shopName: String(form.get('shopName')),
+          }),
+          method: 'POST',
+        },
+        session,
+      );
+      setSlips((current) => [slip, ...current]);
+      setSelectedSlip(slip);
+      event.currentTarget.reset();
+      setNotice(`Slip ${slip.slipNumber} generated.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not generate slip.');
+    } finally {
+      setStatus('idle');
+    }
+  }
+
+  async function refreshReport() {
+    if (!session || !activeMandalId || !activeFestivalId) return;
+    setStatus('loading');
+    try {
+      const nextReport = await apiRequest<CollectionReport>(
+        `/mandals/${activeMandalId}/festivals/${activeFestivalId}/reports/collections`,
+        {},
+        session,
+      );
+      setReport(nextReport);
+      setNotice('Collection report refreshed.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not refresh report.');
+    } finally {
+      setStatus('idle');
+    }
+  }
+
+  async function exportCsv() {
+    if (!session || !activeMandalId || !activeFestivalId) return;
+    const csv = await downloadCsv(
+      `/mandals/${activeMandalId}/festivals/${activeFestivalId}/reports/collections.csv`,
+      session,
+    );
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'digital-vargani-collections.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <main className="shell">
@@ -237,7 +449,7 @@ export default function Home() {
             <span>Festival OS</span>
           </div>
         </div>
-        <nav className="role-switcher" aria-label="Demo role">
+        <nav className="role-switcher" aria-label="Workspace role">
           <button className={role === 'super' ? 'active' : ''} onClick={() => setRole('super')}>
             <ShieldCheck size={18} /> Super Admin
           </button>
@@ -250,259 +462,149 @@ export default function Home() {
         </nav>
         <div className="pitch-card">
           <BadgeIndianRupee size={22} />
-          <strong>Digital Vargani</strong>
-          <span>Live collection, receipt, expense and accountability engine.</span>
+          <strong>{isLive ? session?.user.name : 'Demo Mode'}</strong>
+          <span>
+            {isLive ? `${session?.user.role} connected to ${API_BASE_URL}` : `API: ${API_BASE_URL}`}
+          </span>
         </div>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p>Ganpati 2026 Demo</p>
+            <p>{isLive ? 'Live Supabase-backed workspace' : 'Demo workspace'}</p>
             <h1>{roleTitle(role)}</h1>
           </div>
           <div className="top-actions">
+            {session ? (
+              <button type="button" onClick={logout}>
+                Logout
+              </button>
+            ) : null}
             <button type="button" onClick={() => window.print()}>
               <Printer size={18} /> Print Receipt
             </button>
-            <button type="button">
+            <button type="button" onClick={exportCsv} disabled={!session || !activeFestivalId}>
               <Download size={18} /> Export
             </button>
           </div>
         </header>
 
+        <div className={`notice ${status !== 'idle' ? 'busy' : ''}`}>
+          {status === 'idle' ? notice : 'Working...'}
+        </div>
+
+        {!session && <LoginPanel onSubmit={login} />}
+
         <section className="metrics-grid">
           <Metric
             icon={<IndianRupee />}
             label="Total Vargani"
-            value={money(totalCollection)}
-            note="Live festival collection"
+            value={money(report?.totalCollection ?? totalCollection)}
+            note="Live collection"
           />
           <Metric
             icon={<ReceiptText />}
             label="Slips Generated"
-            value={String(slips.length)}
-            note="Unique numbered receipts"
+            value={String(report?.slipCount ?? slips.length)}
+            note="Unique receipts"
           />
           <Metric
-            icon={<Banknote />}
-            label="Cash To Reconcile"
-            value={money(cashTotal)}
-            note="Khajindar handover view"
+            icon={<FileText />}
+            label="Expenses"
+            value={money(report?.totalExpenses ?? 67500)}
+            note="Approved spend"
           />
           <Metric
-            icon={<WalletCards />}
+            icon={<CheckCircle2 />}
             label="Balance"
-            value={money(totalCollection - approvedExpenses)}
-            note="After approved expenses"
+            value={money(report?.balance ?? totalCollection - 67500)}
+            note={`Cash ${money(cashTotal)}`}
           />
         </section>
 
         {role === 'super' && (
           <section className="two-column">
-            <div className="panel">
-              <div className="panel-heading">
-                <div>
-                  <p>Onboarding</p>
-                  <h2>Create Mandal Account</h2>
-                </div>
-                <Plus size={20} />
-              </div>
-              <form className="form-grid" onSubmit={createMandal}>
-                <label>
-                  Mandal name
-                  <input
-                    value={mandalName}
-                    onChange={(event) => setMandalName(event.target.value)}
-                    placeholder="Enter mandal name"
-                  />
-                </label>
-                <label>
-                  Locality
-                  <input defaultValue="Pune" />
-                </label>
-                <label>
-                  Admin mobile
-                  <input defaultValue="+919876543210" />
-                </label>
-                <button className="primary" type="submit">
-                  <Plus size={18} /> Create Mandal
-                </button>
-              </form>
-            </div>
-            <div className="panel table-panel">
-              <div className="panel-heading">
-                <div>
-                  <p>10,000 Mandal Ready</p>
-                  <h2>Mandals</h2>
-                </div>
-                <Layers3 size={20} />
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Mandal</th>
-                    <th>Admin</th>
-                    <th>Members</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mandals.map((mandal) => (
-                    <tr key={mandal.id}>
-                      <td>
-                        <strong>{mandal.name}</strong>
-                        <span>
-                          {mandal.locality}, {mandal.city}
-                        </span>
-                      </td>
-                      <td>{mandal.admin}</td>
-                      <td>{mandal.members}</td>
-                      <td>
-                        <span className={`status ${mandal.status.toLowerCase()}`}>
-                          {mandal.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <MandalCreatePanel
+              disabled={!session || session.user.role !== 'SUPER_ADMIN'}
+              onSubmit={createMandal}
+            />
+            <MandalTable
+              mandals={mandals}
+              selectedMandalId={selectedMandalId}
+              onSelect={setSelectedMandalId}
+            />
           </section>
         )}
 
         {role === 'admin' && (
           <section className="dashboard-grid">
             <div className="panel wide">
-              <div className="panel-heading">
-                <div>
-                  <p>Collection Command Center</p>
-                  <h2>Member-wise Vargani</h2>
-                </div>
-                <SearchBox value={areaSearch} onChange={setAreaSearch} />
-              </div>
-              <div className="bar-list">
-                {memberTotals.map((row) => (
-                  <div className="bar-row" key={row.member}>
-                    <span>{row.member}</span>
-                    <div>
-                      <i
-                        style={{
-                          width: `${Math.max(8, (row.total / Math.max(totalCollection, 1)) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <strong>{money(row.total)}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="slip-list">
-                {filteredSlips.map((slip) => (
-                  <button key={slip.id} onClick={() => setSelectedSlip(slip)}>
-                    <span>{slip.number}</span>
-                    <strong>{slip.contributorName}</strong>
-                    <em>
-                      {money(slip.amount)} · {slip.paymentMode} · {slip.collectedBy}
-                    </em>
-                  </button>
-                ))}
-              </div>
+              <WorkspaceSelectors
+                activeFestivalId={activeFestivalId}
+                activeMandalId={activeMandalId}
+                festivals={festivals}
+                mandals={mandals}
+                onFestivalChange={setSelectedFestivalId}
+                onMandalChange={setSelectedMandalId}
+                showMandal={session?.user.role === 'SUPER_ADMIN'}
+              />
+              <button
+                className="primary"
+                type="button"
+                onClick={refreshReport}
+                disabled={!session || !activeFestivalId}
+              >
+                <CircleGauge size={18} /> Refresh Report
+              </button>
             </div>
+            <FestivalPanel disabled={!session || !activeMandalId} onSubmit={createFestival} />
+            <CustomFieldsPanel
+              fields={customFields}
+              disabled={!session || !activeFestivalId}
+              onSubmit={createCustomField}
+            />
+            <TemplatePanel disabled={!session || !activeFestivalId} onSubmit={createTemplate} />
+            <SlipList slips={slips} onSelect={setSelectedSlip} />
             <ReceiptPreview slip={selectedSlip} />
-            <div className="panel">
-              <div className="panel-heading">
-                <div>
-                  <p>Expenses</p>
-                  <h2>Festival Spend</h2>
-                </div>
-                <FileText size={20} />
-              </div>
-              <div className="expense-list">
-                {expenses.map((expense) => (
-                  <div key={expense.id}>
-                    <span>{expense.category}</span>
-                    <strong>{money(expense.amount)}</strong>
-                    <em>
-                      {expense.vendor} · {expense.status}
-                    </em>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <TemplatePanel />
           </section>
         )}
 
         {role === 'member' && (
           <section className="two-column member-view">
-            <div className="panel">
-              <div className="panel-heading">
-                <div>
-                  <p>Member Login: Sagar Jadhav</p>
-                  <h2>Generate Vargani Slip</h2>
-                </div>
-                <LogIn size={20} />
-              </div>
-              <form className="form-grid" onSubmit={generateSlip}>
-                <label>
-                  Contributor name
-                  <input name="contributorName" required placeholder="Name of donor / shop owner" />
-                </label>
-                <label>
-                  Shop / company
-                  <input name="shopName" placeholder="Optional" />
-                </label>
-                <label>
-                  Mobile
-                  <input name="mobile" inputMode="tel" placeholder="10 digit mobile" />
-                </label>
-                <label>
-                  Area
-                  <input name="area" required defaultValue="Laxmi Road" />
-                </label>
-                <label>
-                  Amount
-                  <input name="amount" required inputMode="numeric" placeholder="1101" />
-                </label>
-                <label>
-                  Payment mode
-                  <select name="paymentMode">
-                    <option>Cash</option>
-                    <option>UPI</option>
-                    <option>Cheque</option>
-                    <option>Bank Transfer</option>
-                  </select>
-                </label>
-                <label>
-                  Collected by
-                  <select name="collectedBy">
-                    {members.map((member) => (
-                      <option key={member}>{member}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Group
-                  <select name="group">
-                    {groups.map((group) => (
-                      <option key={group}>{group}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="full">
-                  Custom note
-                  <input name="notes" placeholder="Sponsor category, reference, building name..." />
-                </label>
-                <button className="primary full" type="submit">
-                  <ReceiptText size={18} /> Generate Digital Slip
-                </button>
-              </form>
-            </div>
+            <SlipForm customFields={customFields} disabled={!session} onSubmit={generateSlip} />
             <ReceiptPreview slip={selectedSlip} />
           </section>
         )}
       </section>
     </main>
+  );
+}
+
+function LoginPanel({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return (
+    <div className="panel">
+      <div className="panel-heading">
+        <div>
+          <p>Live Login</p>
+          <h2>Connect to API</h2>
+        </div>
+        <LogIn size={20} />
+      </div>
+      <form className="form-grid" onSubmit={onSubmit}>
+        <label>
+          Email or phone
+          <input name="identifier" required placeholder="admin@mandal.com" />
+        </label>
+        <label>
+          Password
+          <input name="password" required type="password" placeholder="Minimum 8 characters" />
+        </label>
+        <button className="primary" type="submit">
+          <LogIn size={18} /> Login
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -527,31 +629,454 @@ function Metric({
   );
 }
 
-function SearchBox({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function MandalCreatePanel({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
   return (
-    <label className="search">
-      <Search size={16} />
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Search area, member, donor"
-      />
-    </label>
+    <div className="panel">
+      <div className="panel-heading">
+        <div>
+          <p>Onboarding</p>
+          <h2>Create Mandal Account</h2>
+        </div>
+        <Plus size={20} />
+      </div>
+      <form className="form-grid" onSubmit={onSubmit}>
+        <label>
+          Mandal name
+          <input disabled={disabled} name="name" required placeholder="Shree Ganesh Mitra Mandal" />
+        </label>
+        <label>
+          Locality
+          <input disabled={disabled} name="locality" required placeholder="Budhwar Peth" />
+        </label>
+        <label>
+          City
+          <input disabled={disabled} name="city" required defaultValue="Pune" />
+        </label>
+        <label>
+          Admin name
+          <input disabled={disabled} name="adminName" required placeholder="Amit Patil" />
+        </label>
+        <label>
+          Admin email
+          <input
+            disabled={disabled}
+            name="adminEmail"
+            required
+            type="email"
+            placeholder="admin@mandal.com"
+          />
+        </label>
+        <label>
+          Admin mobile
+          <input disabled={disabled} name="adminPhone" required placeholder="+919876543210" />
+        </label>
+        <label className="full">
+          Admin password
+          <input
+            disabled={disabled}
+            name="adminPassword"
+            required
+            minLength={12}
+            type="password"
+            placeholder="Minimum 12 characters"
+          />
+        </label>
+        <button className="primary full" disabled={disabled} type="submit">
+          <Plus size={18} /> Create Mandal
+        </button>
+      </form>
+    </div>
   );
 }
 
-function ReceiptPreview({ slip }: { slip: Slip }) {
+function MandalTable({
+  mandals,
+  onSelect,
+  selectedMandalId,
+}: {
+  mandals: Mandal[];
+  onSelect: (id: string) => void;
+  selectedMandalId: string;
+}) {
+  return (
+    <div className="panel table-panel">
+      <div className="panel-heading">
+        <div>
+          <p>Onboarded Mandals</p>
+          <h2>Accounts</h2>
+        </div>
+        <Layers3 size={20} />
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Mandal</th>
+            <th>City</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {mandals.map((mandal) => (
+            <tr
+              key={mandal.id}
+              onClick={() => onSelect(mandal.id)}
+              className={selectedMandalId === mandal.id ? 'selected-row' : ''}
+            >
+              <td>
+                <strong>{mandal.name}</strong>
+                <span>{mandal.slug}</span>
+              </td>
+              <td>{mandal.city ?? '-'}</td>
+              <td>
+                <span className={`status ${mandal.status.toLowerCase()}`}>{mandal.status}</span>
+              </td>
+            </tr>
+          ))}
+          {!mandals.length && (
+            <tr>
+              <td colSpan={3}>Login as super admin to load live mandals.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function WorkspaceSelectors({
+  activeFestivalId,
+  activeMandalId,
+  festivals,
+  mandals,
+  onFestivalChange,
+  onMandalChange,
+  showMandal,
+}: {
+  activeFestivalId: string;
+  activeMandalId: string;
+  festivals: Festival[];
+  mandals: Mandal[];
+  onFestivalChange: (id: string) => void;
+  onMandalChange: (id: string) => void;
+  showMandal: boolean;
+}) {
+  return (
+    <div className="form-grid compact">
+      {showMandal && (
+        <label>
+          Mandal
+          <select value={activeMandalId} onChange={(event) => onMandalChange(event.target.value)}>
+            {mandals.map((mandal) => (
+              <option key={mandal.id} value={mandal.id}>
+                {mandal.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label>
+        Festival
+        <select value={activeFestivalId} onChange={(event) => onFestivalChange(event.target.value)}>
+          {festivals.map((festival) => (
+            <option key={festival.id} value={festival.id}>
+              {festival.name} - {festival.status}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function FestivalPanel({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="panel">
+      <div className="panel-heading">
+        <div>
+          <p>Festival Setup</p>
+          <h2>Create Active Festival</h2>
+        </div>
+        <CalendarDays size={20} />
+      </div>
+      <form className="form-grid" onSubmit={onSubmit}>
+        <label>
+          Name
+          <input disabled={disabled} name="name" required defaultValue="Ganpati 2026" />
+        </label>
+        <label>
+          Type
+          <input disabled={disabled} name="type" required defaultValue="GANPATI" />
+        </label>
+        <label>
+          Start date
+          <input disabled={disabled} name="startDate" required type="date" />
+        </label>
+        <label>
+          End date
+          <input disabled={disabled} name="endDate" required type="date" />
+        </label>
+        <label className="full">
+          Target amount
+          <input
+            disabled={disabled}
+            name="targetAmount"
+            inputMode="numeric"
+            placeholder="1500000"
+          />
+        </label>
+        <button className="primary full" disabled={disabled} type="submit">
+          Create And Activate
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function CustomFieldsPanel({
+  disabled,
+  fields,
+  onSubmit,
+}: {
+  disabled: boolean;
+  fields: CustomField[];
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="panel">
+      <div className="panel-heading">
+        <div>
+          <p>Form Builder</p>
+          <h2>Custom Fields</h2>
+        </div>
+        <FileText size={20} />
+      </div>
+      <form className="form-grid" onSubmit={onSubmit}>
+        <label>
+          Label
+          <input disabled={disabled} name="label" required placeholder="Building name" />
+        </label>
+        <label>
+          Type
+          <select disabled={disabled} name="type" defaultValue="TEXT">
+            <option value="TEXT">Text</option>
+            <option value="NUMBER">Number</option>
+            <option value="DATE">Date</option>
+            <option value="DROPDOWN">Dropdown</option>
+            <option value="CHECKBOX">Checkbox</option>
+            <option value="LONG_TEXT">Long text</option>
+          </select>
+        </label>
+        <label className="full">
+          Dropdown options
+          <input disabled={disabled} name="options" placeholder="Gold, Silver, General" />
+        </label>
+        <label className="checkline">
+          <input disabled={disabled} name="required" type="checkbox" /> Required
+        </label>
+        <label className="checkline">
+          <input disabled={disabled} name="dashboardFilter" type="checkbox" /> Dashboard filter
+        </label>
+        <button className="primary full" disabled={disabled} type="submit">
+          Add Field
+        </button>
+      </form>
+      <div className="field-map">
+        {fields.map((field) => (
+          <span key={field.id}>
+            {field.label} ({field.type})
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TemplatePanel({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="panel">
+      <div className="panel-heading">
+        <div>
+          <p>Template Engine</p>
+          <h2>Upload And Activate</h2>
+        </div>
+        <Upload size={20} />
+      </div>
+      <form className="form-grid" onSubmit={onSubmit}>
+        <label>
+          Template name
+          <input disabled={disabled} name="name" required defaultValue="Ganpati Receipt" />
+        </label>
+        <label>
+          Background file URL
+          <input disabled={disabled} name="backgroundFileUrl" required placeholder="https://..." />
+        </label>
+        <label>
+          Canvas width
+          <input disabled={disabled} name="canvasWidth" required defaultValue="1240" />
+        </label>
+        <label>
+          Canvas height
+          <input disabled={disabled} name="canvasHeight" required defaultValue="1754" />
+        </label>
+        <label className="full">
+          Render config JSON
+          <textarea
+            disabled={disabled}
+            name="renderConfig"
+            defaultValue='{"fields":{"slipNumber":{"x":100,"y":80},"contributorName":{"x":160,"y":280},"amount":{"x":820,"y":280}}}'
+          />
+        </label>
+        <button className="primary full" disabled={disabled} type="submit">
+          Activate Template
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function SlipForm({
+  customFields,
+  disabled,
+  onSubmit,
+}: {
+  customFields: CustomField[];
+  disabled: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="panel">
+      <div className="panel-heading">
+        <div>
+          <p>Member Login</p>
+          <h2>Generate Vargani Slip</h2>
+        </div>
+        <ReceiptText size={20} />
+      </div>
+      <form className="form-grid" onSubmit={onSubmit}>
+        <label>
+          Contributor name
+          <input
+            disabled={disabled}
+            name="contributorName"
+            required
+            placeholder="Donor / shop owner"
+          />
+        </label>
+        <label>
+          Shop / company
+          <input disabled={disabled} name="shopName" placeholder="Optional" />
+        </label>
+        <label>
+          Mobile
+          <input disabled={disabled} name="contributorPhone" placeholder="+919876543210" />
+        </label>
+        <label>
+          Area
+          <input disabled={disabled} name="areaName" required placeholder="Laxmi Road" />
+        </label>
+        <label>
+          Amount
+          <input
+            disabled={disabled}
+            name="amount"
+            required
+            inputMode="numeric"
+            placeholder="1101"
+          />
+        </label>
+        <label>
+          Payment mode
+          <select disabled={disabled} name="paymentMode" defaultValue="CASH">
+            <option value="CASH">Cash</option>
+            <option value="UPI">UPI</option>
+            <option value="CHEQUE">Cheque</option>
+            <option value="BANK_TRANSFER">Bank Transfer</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </label>
+        <label className="full">
+          Address
+          <input
+            disabled={disabled}
+            name="contributorAddress"
+            placeholder="Society, lane, shop address"
+          />
+        </label>
+        {customFields.map((field) => (
+          <label key={field.id}>
+            {field.label}
+            <input disabled={disabled} name={`custom_${field.key}`} required={field.required} />
+          </label>
+        ))}
+        <button className="primary full" disabled={disabled} type="submit">
+          <ReceiptText size={18} /> Generate Digital Slip
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function SlipList({
+  onSelect,
+  slips,
+}: {
+  onSelect: (slip: VarganiSlip) => void;
+  slips: VarganiSlip[];
+}) {
+  return (
+    <div className="panel">
+      <div className="panel-heading">
+        <div>
+          <p>Collections</p>
+          <h2>Latest Slips</h2>
+        </div>
+        <ReceiptText size={20} />
+      </div>
+      <div className="slip-list">
+        {slips.map((slip) => (
+          <button key={slip.id} onClick={() => onSelect(slip)}>
+            <span>{slip.slipNumber}</span>
+            <strong>{slip.contributorName}</strong>
+            <em>
+              {money(Number(slip.amount))} - {slip.paymentMode} - {slip.areaName ?? 'No area'}
+            </em>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReceiptPreview({ slip }: { slip: VarganiSlip }) {
   return (
     <div className="receipt-panel">
       <div className="receipt">
         <div className="receipt-top">
-          <span>श्री</span>
+          <span>SH</span>
           <div>
-            <h2>Pune Ganpati Utsav Demo Mandal</h2>
-            <p>Digital Vargani Receipt · Ganpati Festival 2026</p>
+            <h2>Digital Mandal Receipt</h2>
+            <p>Verified Digital Vargani Slip</p>
           </div>
         </div>
-        <div className="receipt-number">{slip.number}</div>
+        <div className="receipt-number">{slip.slipNumber}</div>
         <dl>
           <div>
             <dt>Name</dt>
@@ -563,70 +1088,42 @@ function ReceiptPreview({ slip }: { slip: Slip }) {
           </div>
           <div>
             <dt>Area</dt>
-            <dd>{slip.area}</dd>
+            <dd>{slip.areaName || '-'}</dd>
           </div>
           <div>
             <dt>Mobile</dt>
-            <dd>{slip.mobile || '-'}</dd>
+            <dd>{slip.contributorPhone || '-'}</dd>
           </div>
           <div>
             <dt>Payment</dt>
             <dd>{slip.paymentMode}</dd>
           </div>
           <div>
-            <dt>Collected By</dt>
-            <dd>{slip.collectedBy}</dd>
+            <dt>Date</dt>
+            <dd>
+              {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(
+                new Date(slip.createdAt),
+              )}
+            </dd>
           </div>
         </dl>
         <div className="receipt-amount">
           <span>Amount Received</span>
-          <strong>{money(slip.amount)}</strong>
+          <strong>{money(Number(slip.amount))}</strong>
         </div>
-        <p className="receipt-note">{slip.notes || 'Thank you for supporting the festival.'}</p>
+        <p className="receipt-note">Thank you for supporting the festival.</p>
         <div className="receipt-footer">
-          <span>{slip.createdAt}</span>
-          <CheckCircle2 size={18} /> Verified Digital Slip
+          <span>{slip.id}</span>
+          <CheckCircle2 size={18} /> Verified
         </div>
       </div>
-    </div>
-  );
-}
-
-function TemplatePanel() {
-  return (
-    <div className="panel">
-      <div className="panel-heading">
-        <div>
-          <p>Template Engine</p>
-          <h2>Slip Fields</h2>
-        </div>
-        <CalendarDays size={20} />
-      </div>
-      <div className="field-map">
-        {[
-          'Slip No',
-          'Date',
-          'Name',
-          'Shop',
-          'Amount',
-          'Payment Mode',
-          'Collected By',
-          'Custom Fields',
-        ].map((field) => (
-          <span key={field}>{field}</span>
-        ))}
-      </div>
-      <p className="muted">
-        Upload each mandal's printed vargani slip design, place fields, preview, and activate a
-        version.
-      </p>
     </div>
   );
 }
 
 function roleTitle(role: Role) {
   if (role === 'super') return 'Super Admin: Mandal Onboarding';
-  if (role === 'admin') return 'Mandal Admin: Collection Dashboard';
+  if (role === 'admin') return 'Mandal Admin: Festival Operations';
   return 'Member: Mobile Vargani Generator';
 }
 
@@ -635,5 +1132,5 @@ function money(value: number) {
     currency: 'INR',
     maximumFractionDigits: 0,
     style: 'currency',
-  }).format(value);
+  }).format(Number.isFinite(value) ? value : 0);
 }

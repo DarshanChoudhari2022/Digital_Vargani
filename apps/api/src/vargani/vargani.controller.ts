@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { AuthContext } from '../auth/auth-context';
@@ -40,6 +40,13 @@ export class VarganiController {
   @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
   getSlip(@AuthUser() ctx: AuthContext, @Param('id') id: string) {
     return this.varganiService.getSlip(ctx, id);
+  }
+
+  @Get('slips/:id/receipt.html')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
+  getReceiptHtml(@AuthUser() ctx: AuthContext, @Param('id') id: string) {
+    return this.varganiService.renderReceiptHtml(ctx, id);
   }
 
   @Post('slips/:id/cancel')

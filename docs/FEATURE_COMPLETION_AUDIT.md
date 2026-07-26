@@ -24,12 +24,22 @@ Status as of the current implementation.
 - Custom vargani field APIs for per-festival configurable collection forms.
 - Slip template and template version APIs, including active version selection per festival.
 - Mandal audit-event query API for traceability.
+- Printable server-rendered receipt HTML endpoint for each vargani slip.
+- Live API-backed web flows for:
+  - login/logout with persisted session
+  - super-admin mandal onboarding
+  - mandal/festival selection
+  - festival creation and activation
+  - custom vargani field creation
+  - template version creation and activation
+  - member vargani slip generation
+  - collection report refresh and CSV download
 - Supabase public schema pushed and verified with all expected tables:
   `audit_events`, `custom_fields`, `expense_categories`, `expenses`, `festivals`, `mandals`,
   `member_groups`, `members`, `slip_sequences`, `slip_template_versions`, `slip_templates`,
   `user_sessions`, `users`, and `vargani_slips`.
 - Focused API unit tests for CSV export, tenant isolation, and slug/key generation.
-- Demo web app for super admin, mandal admin, and member collector flows.
+- Demo fallback data remains available when no API login is active.
 
 ## Verified Build Checks
 
@@ -45,10 +55,8 @@ pnpm test
 
 ## Partial / Not Yet Production Complete
 
-- Web app still uses demo/in-memory data for the polished presentation surface.
-- Web app is not yet connected to the NestJS APIs for live CRUD.
-- Template builder UI is represented in the demo; backend APIs now exist, but the live drag/drop builder screen is not connected yet.
-- PDF/image receipt rendering worker is not implemented yet.
+- Drag/drop visual template field placement is not implemented yet; template activation currently accepts render JSON and a background URL.
+- PDF/image receipt rendering worker is not implemented yet; printable server-rendered receipt HTML is implemented.
 - Queue/Redis worker integration for receipt rendering and exports is not implemented yet.
 - File storage upload to S3/Supabase Storage is not implemented yet.
 - Row Level Security policies are not yet authored for Supabase because the backend currently enforces tenant isolation in NestJS.
@@ -58,8 +66,7 @@ pnpm test
 ## Next Required Production Milestones
 
 1. Seed the first super admin and demo mandal credentials.
-2. Connect Next.js screens to NestJS APIs.
-3. Build live template upload and field placement UI on top of the template APIs.
-4. Build receipt rendering worker.
-5. Add integration/concurrency tests for slip creation.
-6. Add storage, queues, observability, and deployment config.
+2. Build live drag/drop template upload and field placement UI on top of the template APIs.
+3. Build PDF/image receipt rendering worker.
+4. Add integration/concurrency tests for slip creation.
+5. Add storage, queues, observability, and deployment config.
