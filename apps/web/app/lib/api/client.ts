@@ -69,8 +69,7 @@ export interface CollectionReport {
   }>;
 }
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:4000';
+export const API_BASE_URL = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL);
 
 export async function apiRequest<T>(
   path: string,
@@ -124,4 +123,18 @@ async function readErrorMessage(response: Response): Promise<string> {
   } catch {
     return `Request failed with ${response.status}`;
   }
+}
+
+function normalizeApiBaseUrl(value?: string): string {
+  const baseUrl = (value || 'http://localhost:4000').replace(/\/$/, '');
+
+  if (/\/api\/v\d+$/.test(baseUrl)) {
+    return baseUrl;
+  }
+
+  if (baseUrl.endsWith('/api')) {
+    return `${baseUrl}/v1`;
+  }
+
+  return `${baseUrl}/api/v1`;
 }

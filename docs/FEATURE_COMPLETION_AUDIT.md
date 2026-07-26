@@ -40,6 +40,13 @@ Status as of the current implementation.
   `user_sessions`, `users`, and `vargani_slips`.
 - Focused API unit tests for CSV export, tenant isolation, and slug/key generation.
 - Demo fallback data remains available when no API login is active.
+- Akhilnayak Mitra Mandal demo data is seeded in Supabase with:
+  - original attached vargani slip image asset
+  - active Ganpati Festival 2026
+  - 8 admin/khajindar/group leader/member logins
+  - custom fields for donor type, building/lane, and receipt note
+  - active template coordinates for slip number, date, name, address, building/lane, and amount
+  - sample receipt `DM-GAN-2026-000003`
 
 ## Verified Build Checks
 

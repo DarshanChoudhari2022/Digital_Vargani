@@ -24,6 +24,25 @@ interface SequenceRow {
   current_value: bigint;
 }
 
+interface TemplateFieldPlacement {
+  color?: string;
+  fontSize?: number;
+  fontWeight?: number | string;
+  height?: number;
+  textAlign?: 'center' | 'left' | 'right';
+  width?: number;
+  x: number;
+  y: number;
+}
+
+interface TemplateRenderConfig {
+  fields?: Record<string, TemplateFieldPlacement>;
+}
+
+type SlipWithTemplate = Awaited<ReturnType<VarganiService['getSlip']>> & {
+  templateVersion: NonNullable<Awaited<ReturnType<VarganiService['getSlip']>>['templateVersion']>;
+};
+
 @Injectable()
 export class VarganiService {
   constructor(private readonly prisma: PrismaService) {}
@@ -166,6 +185,7 @@ export class VarganiService {
         collector: { select: { id: true, name: true, phone: true } },
         festival: true,
         group: true,
+        templateVersion: true,
       },
       where: { id, mandalId },
     });
@@ -187,6 +207,10 @@ export class VarganiService {
       slip.customData && typeof slip.customData === 'object' && !Array.isArray(slip.customData)
         ? (slip.customData as Record<string, unknown>)
         : {};
+
+    if (slip.templateVersion) {
+      return this.renderTemplateReceiptHtml(slip as SlipWithTemplate, customFields, customData);
+    }
 
     const customRows = customFields
       .map((field) => {
@@ -243,6 +267,68 @@ export class VarganiService {
     </dl>
     <section class="amount"><span>Amount Received</span><strong>Rs. ${Number(slip.amount).toLocaleString('en-IN')}</strong></section>
     <section class="footer"><span>${escapeHtml(slip.createdAt.toISOString())}</span><strong>Verified Digital Slip</strong></section>
+  </main>
+</body>
+</html>`;
+  }
+
+  private renderTemplateReceiptHtml(
+    slip: SlipWithTemplate,
+    customFields: Array<{ key: string; label: string }>,
+    customData: Record<string, unknown>,
+  ) {
+    const template = slip.templateVersion;
+    const renderConfig = template.renderConfig as TemplateRenderConfig;
+    const fieldValues: Record<string, string> = {
+      amount: Number(slip.amount).toLocaleString('en-IN'),
+      areaName: slip.areaName ?? '',
+      contributorAddress: slip.contributorAddress ?? '',
+      contributorName: slip.contributorName,
+      contributorPhone: slip.contributorPhone ?? '',
+      createdAt: new Intl.DateTimeFormat('en-IN').format(slip.createdAt),
+      paymentMode: slip.paymentMode,
+      shopName: slip.shopName ?? '',
+      slipNumber: slip.slipNumber.split('-').at(-1)?.replace(/^0+/, '') || slip.slipNumber,
+    };
+
+    for (const field of customFields) {
+      const value = customData[field.key];
+      if (value !== undefined && value !== null) {
+        fieldValues[field.key] = String(value);
+      }
+    }
+
+    const overlays = Object.entries(renderConfig.fields ?? {})
+      .map(([key, placement]) => {
+        const value = fieldValues[key];
+        if (!value) {
+          return '';
+        }
+
+        return `<span class="field" style="${fieldStyle(placement)}">${escapeHtml(value)}</span>`;
+      })
+      .join('');
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(slip.slipNumber)} - Digital Vargani Receipt</title>
+  <style>
+    body { background: #f3f0e8; font-family: Arial, sans-serif; margin: 0; padding: 24px; }
+    .sheet { background: #fff; box-shadow: 0 20px 60px rgba(0,0,0,.16); margin: 0 auto; position: relative; width: min(100%, ${template.canvasWidth}px); }
+    .sheet::before { content: ""; display: block; padding-top: ${(template.canvasHeight / template.canvasWidth) * 100}%; }
+    .background, .layer { inset: 0; position: absolute; }
+    .background { height: 100%; object-fit: contain; width: 100%; }
+    .field { box-sizing: border-box; color: #111; overflow: hidden; position: absolute; white-space: nowrap; }
+    @media print { body { background: #fff; padding: 0; } .sheet { box-shadow: none; width: ${template.canvasWidth}px; } }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <img class="background" src="${escapeHtml(template.backgroundFileUrl)}" alt="" />
+    <section class="layer" aria-label="Receipt fields">${overlays}</section>
   </main>
 </body>
 </html>`;
@@ -340,4 +426,25 @@ function escapeHtml(value: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function fieldStyle(placement: TemplateFieldPlacement): string {
+  const declarations = [
+    `left:${placement.x}px`,
+    `top:${placement.y}px`,
+    `font-size:${placement.fontSize ?? 28}px`,
+    `font-weight:${placement.fontWeight ?? 800}`,
+    `color:${placement.color ?? '#111'}`,
+    `text-align:${placement.textAlign ?? 'left'}`,
+  ];
+
+  if (placement.width) {
+    declarations.push(`width:${placement.width}px`);
+  }
+
+  if (placement.height) {
+    declarations.push(`height:${placement.height}px`);
+  }
+
+  return declarations.join(';');
 }
