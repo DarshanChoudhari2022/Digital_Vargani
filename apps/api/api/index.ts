@@ -6,7 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
-import { AppConfig } from '../src/config/app-config';
+import type { AppConfig } from '../src/config/app-config';
 
 let cachedServer: express.Express | undefined;
 
@@ -15,7 +15,8 @@ async function bootstrapServer(): Promise<express.Express> {
     return cachedServer;
   }
 
-  const { AppModule } = await import('../src/app.module');
+  const appModulePath = '../dist/app.module.js';
+  const { AppModule } = await import(appModulePath);
   const server = express();
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     bufferLogs: true,

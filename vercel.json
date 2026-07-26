@@ -4,6 +4,7 @@
   "buildCommand": "pnpm --filter @digital-mandal/api build",
   "functions": {
     "api/index.ts": {
+      "includeFiles": "apps/api/dist/**",
       "maxDuration": 30
     }
   },
