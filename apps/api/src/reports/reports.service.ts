@@ -86,4 +86,87 @@ export class ReportsService {
       totalExpenses,
     };
   }
+
+  async exportCollectionReportCsv(
+    ctx: AuthContext,
+    mandalId: string,
+    festivalId: string,
+    query: CollectionReportQueryDto,
+  ) {
+    assertSameMandal(ctx, mandalId);
+
+    const createdAt =
+      query.dateFrom || query.dateTo
+        ? {
+            gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
+            lte: query.dateTo ? new Date(query.dateTo) : undefined,
+          }
+        : undefined;
+
+    const where: Prisma.VarganiSlipWhereInput = {
+      areaName: query.areaName,
+      collectedByUserId: query.memberId,
+      createdAt,
+      festivalId,
+      groupId: query.groupId,
+      mandalId,
+      paymentMode: query.paymentMode,
+      status: SlipStatus.ACTIVE,
+    };
+
+    const slips = await this.prisma.varganiSlip.findMany({
+      include: {
+        collector: { select: { name: true, phone: true } },
+        group: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      where,
+    });
+
+    const rows = slips.map((slip) => [
+      slip.slipNumber,
+      slip.createdAt.toISOString(),
+      slip.contributorName,
+      slip.shopName ?? '',
+      slip.contributorPhone ?? '',
+      slip.contributorAddress ?? '',
+      slip.areaName ?? '',
+      slip.group?.name ?? '',
+      slip.collector.name,
+      slip.collector.phone ?? '',
+      slip.paymentMode,
+      Number(slip.amount).toFixed(2),
+    ]);
+
+    return toCsv([
+      [
+        'Slip Number',
+        'Created At',
+        'Contributor Name',
+        'Shop Name',
+        'Phone',
+        'Address',
+        'Area',
+        'Group',
+        'Collected By',
+        'Collector Phone',
+        'Payment Mode',
+        'Amount',
+      ],
+      ...rows,
+    ]);
+  }
+}
+
+export function toCsv(rows: Array<Array<string | number>>): string {
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+}
+
+export function csvCell(value: string | number): string {
+  const text = String(value);
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+
+  return text;
 }

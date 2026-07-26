@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AuditModule } from './audit/audit.module';
 import { validateAppConfig } from './config/app-config';
 import { AuthModule } from './auth/auth.module';
 import { ExpensesModule } from './expenses/expenses.module';
@@ -10,6 +11,7 @@ import { MandalsModule } from './mandals/mandals.module';
 import { MembersModule } from './members/members.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReportsModule } from './reports/reports.module';
+import { TemplatesModule } from './templates/templates.module';
 import { VarganiModule } from './vargani/vargani.module';
 
 @Module({
@@ -33,7 +35,9 @@ import { VarganiModule } from './vargani/vargani.module';
     MembersModule,
     VarganiModule,
     ExpensesModule,
+    TemplatesModule,
     ReportsModule,
+    AuditModule,
     HealthModule,
   ],
 })
