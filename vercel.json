@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "installCommand": "pnpm install --frozen-lockfile=false",
+  "buildCommand": "pnpm --filter @digital-mandal/api build",
+  "functions": {
+    "apps/api/api/index.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/apps/api/api/index"
+    }
+  ]
+}
