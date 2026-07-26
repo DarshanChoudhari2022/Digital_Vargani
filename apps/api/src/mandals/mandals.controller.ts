@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CreateMandalDto } from './dto/create-mandal.dto';
+import { CreateMandalUserDto } from './dto/create-mandal-user.dto';
 import { ListMandalsQueryDto } from './dto/list-mandals-query.dto';
 import { UpdateMandalStatusDto } from './dto/update-mandal-status.dto';
 import { MandalsService } from './mandals.service';
@@ -35,6 +36,20 @@ export class MandalsController {
   @ApiOkResponse({ description: 'Mandal details.' })
   getById(@Param('id') id: string) {
     return this.mandalsService.getById(id);
+  }
+
+  @Get(':id/users')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOkResponse({ description: 'All login accounts for a mandal.' })
+  listUsers(@Param('id') id: string) {
+    return this.mandalsService.listUsers(id);
+  }
+
+  @Post(':id/users')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiCreatedResponse({ description: 'Creates an additional mandal login account.' })
+  createUser(@Param('id') id: string, @Body() dto: CreateMandalUserDto) {
+    return this.mandalsService.createUser(id, dto);
   }
 
   @Patch(':id/status')

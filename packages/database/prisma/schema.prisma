@@ -143,6 +143,7 @@ model UserSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
+  @@index([id, userId, revokedAt, expiresAt])
   @@map("user_sessions")
 }
 
@@ -323,6 +324,9 @@ model VarganiSlip {
 
   @@unique([mandalId, festivalId, slipNumber])
   @@index([mandalId, festivalId, createdAt])
+  @@index([mandalId, festivalId, status, createdAt])
+  @@index([mandalId, festivalId, paymentMode, createdAt])
+  @@index([mandalId, festivalId, areaName, createdAt])
   @@index([mandalId, festivalId, collectedByUserId, createdAt])
   @@index([mandalId, festivalId, groupId, createdAt])
   @@map("vargani_slips")
@@ -363,6 +367,7 @@ model Expense {
   approver User?            @relation("ExpenseApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@index([mandalId, festivalId, expenseDate])
+  @@index([mandalId, festivalId, status, expenseDate])
   @@map("expenses")
 }
 
@@ -382,6 +387,7 @@ model AuditEvent {
   actor  User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([mandalId, entityType, entityId])
+  @@index([mandalId, createdAt])
   @@index([actorUserId, createdAt])
   @@map("audit_events")
 }

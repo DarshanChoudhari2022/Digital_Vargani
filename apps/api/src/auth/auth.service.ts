@@ -76,14 +76,81 @@ export class AuthService {
     }
   }
 
-  async verifyAccessToken(token: string): Promise<AuthContext> {
-    const payload = await this.jwt.verifyAsync<JwtPayload>(token, {
-      secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }),
+  async getMe(ctx: AuthContext) {
+    const user = await this.prisma.user.findUnique({
+      select: {
+        createdAt: true,
+        email: true,
+        id: true,
+        lastLoginAt: true,
+        mandal: {
+          select: {
+            city: true,
+            id: true,
+            locality: true,
+            logoUrl: true,
+            name: true,
+            slug: true,
+            status: true,
+          },
+        },
+        mandalId: true,
+        name: true,
+        phone: true,
+        role: true,
+        status: true,
+      },
+      where: { id: ctx.userId },
     });
 
+    if (!user || user.status !== AccountStatus.ACTIVE) {
+      throw new UnauthorizedException('Session is no longer active.');
+    }
+
+    return { user };
+  }
+
+  async verifyAccessToken(token: string): Promise<AuthContext> {
+    let payload: JwtPayload;
+
+    try {
+      payload = await this.jwt.verifyAsync<JwtPayload>(token, {
+        secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid access token.');
+    }
+
+    const session = await this.prisma.userSession.findFirst({
+      select: {
+        expiresAt: true,
+        revokedAt: true,
+        user: {
+          select: {
+            mandalId: true,
+            role: true,
+            status: true,
+          },
+        },
+      },
+      where: {
+        id: payload.sessionId,
+        userId: payload.sub,
+      },
+    });
+
+    if (
+      !session ||
+      session.revokedAt ||
+      session.expiresAt <= new Date() ||
+      session.user.status !== AccountStatus.ACTIVE
+    ) {
+      throw new UnauthorizedException('Session is no longer active.');
+    }
+
     return {
-      mandalId: payload.mandalId,
-      role: payload.role,
+      mandalId: session.user.mandalId,
+      role: session.user.role,
       sessionId: payload.sessionId,
       userId: payload.sub,
     };

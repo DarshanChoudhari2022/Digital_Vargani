@@ -1,13 +1,21 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountStatus, UserRole } from '@prisma/client';
 import argon2 from 'argon2';
 import { slugify } from '../common/utils/slugify';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMandalDto } from './dto/create-mandal.dto';
+import { CreateMandalUserDto } from './dto/create-mandal-user.dto';
 import { ListMandalsQueryDto } from './dto/list-mandals-query.dto';
 import { UpdateMandalStatusDto } from './dto/update-mandal-status.dto';
 
 type JsonWriteValue = never;
+
+const ownerCreatableRoles = new Set<UserRole>([
+  UserRole.MANDAL_ADMIN,
+  UserRole.KHAJINDAR,
+  UserRole.GROUP_LEADER,
+  UserRole.MEMBER,
+]);
 
 interface MandalListWhere {
   OR?: Array<{
@@ -162,6 +170,83 @@ export class MandalsService {
     return mandal;
   }
 
+  async listUsers(id: string) {
+    await this.ensureMandalExists(id);
+
+    return this.prisma.user.findMany({
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        createdAt: true,
+        email: true,
+        id: true,
+        lastLoginAt: true,
+        name: true,
+        phone: true,
+        role: true,
+        status: true,
+      },
+      where: { mandalId: id },
+    });
+  }
+
+  async createUser(id: string, dto: CreateMandalUserDto) {
+    if (!ownerCreatableRoles.has(dto.role)) {
+      throw new BadRequestException('Role cannot be created for a mandal account.');
+    }
+
+    if (!dto.email && !dto.phone) {
+      throw new BadRequestException('Either email or phone is required for login.');
+    }
+
+    await this.ensureMandalExists(id);
+
+    const uniqueChecks = [
+      dto.email ? { email: dto.email.toLowerCase() } : null,
+      dto.phone ? { phone: dto.phone } : null,
+    ].filter(Boolean) as Array<{ email?: string; phone?: string }>;
+
+    const existingUser = await this.prisma.user.findFirst({
+      where: { OR: uniqueChecks },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('User email or phone is already used.');
+    }
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email?.toLowerCase(),
+        mandalId: id,
+        name: dto.name,
+        passwordHash: await argon2.hash(dto.password),
+        phone: dto.phone,
+        role: dto.role,
+        status: AccountStatus.ACTIVE,
+      },
+      select: {
+        createdAt: true,
+        email: true,
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+        status: true,
+      },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        action: 'user_created',
+        after: this.toJson({ role: user.role, userId: user.id }),
+        entityId: user.id,
+        entityType: 'user',
+        mandalId: id,
+      },
+    });
+
+    return user;
+  }
+
   async updateStatus(id: string, dto: UpdateMandalStatusDto) {
     const mandal = await this.prisma.mandal.findUnique({ where: { id } });
 
@@ -210,5 +295,18 @@ export class MandalsService {
 
   private toJson(value: unknown): JsonWriteValue {
     return value as JsonWriteValue;
+  }
+
+  private async ensureMandalExists(id: string) {
+    const mandal = await this.prisma.mandal.findUnique({
+      select: { id: true },
+      where: { id },
+    });
+
+    if (!mandal) {
+      throw new NotFoundException('Mandal not found.');
+    }
+
+    return mandal;
   }
 }

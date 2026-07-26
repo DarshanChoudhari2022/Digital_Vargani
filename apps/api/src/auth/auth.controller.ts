@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   HttpStatus,
@@ -56,5 +57,13 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@AuthUser() authUser: AuthContext) {
     await this.authService.logout(authUser);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Returns the current authenticated user and mandal scope.' })
+  me(@AuthUser() authUser: AuthContext) {
+    return this.authService.getMe(authUser);
   }
 }
