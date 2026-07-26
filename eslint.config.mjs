@@ -25,7 +25,9 @@ export default tseslint.config(
         ...globals.jest,
       },
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ['apps/api/api/*.ts'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
