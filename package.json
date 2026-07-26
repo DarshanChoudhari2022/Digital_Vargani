@@ -17,7 +17,10 @@
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @digital-mandal/database prisma:generate",
     "db:migrate": "pnpm --filter @digital-mandal/database prisma:migrate",
-    "db:studio": "pnpm --filter @digital-mandal/database prisma:studio"
+    "db:studio": "pnpm --filter @digital-mandal/database prisma:studio",
+    "demo:seed:akhilnayak": "node scripts/seed-akhilnayak-demo.cjs",
+    "demo:verify:akhilnayak": "node scripts/verify-akhilnayak-demo.cjs",
+    "db:verify:tables": "node scripts/verify-supabase-tables.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
