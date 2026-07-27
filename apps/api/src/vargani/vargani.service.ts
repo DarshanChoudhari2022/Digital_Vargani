@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CancelSlipDto } from './dto/cancel-slip.dto';
 import { CreateVarganiSlipDto } from './dto/create-vargani-slip.dto';
 import { ShareSlipDto } from './dto/share-slip.dto';
+import { UpdateVarganiSlipDto } from './dto/update-vargani-slip.dto';
 
 interface SequenceRow {
   current_value: bigint;
@@ -438,6 +439,55 @@ export class VarganiService {
           actorUserId: ctx.userId,
           before: toJsonWriteValue(slip),
           after: toJsonWriteValue(updated),
+          entityId: id,
+          entityType: 'vargani_slip',
+          mandalId,
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  async updateSlip(ctx: AuthContext, id: string, dto: UpdateVarganiSlipDto) {
+    const mandalId = requireMandalId(ctx);
+    const slip = await this.prisma.varganiSlip.findFirst({ where: { id, mandalId } });
+
+    if (!slip) {
+      throw new NotFoundException('Slip not found.');
+    }
+
+    if (ctx.role === UserRole.MEMBER && slip.collectedByUserId !== ctx.userId) {
+      throw new ForbiddenException('Members can update only their own slips.');
+    }
+
+    if (slip.status === SlipStatus.CANCELLED) {
+      throw new BadRequestException('Cancelled slips cannot be updated.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.varganiSlip.update({
+        data: {
+          amount: dto.amount,
+          areaName: dto.areaName,
+          contributorAddress: dto.contributorAddress,
+          contributorName: dto.contributorName,
+          contributorPhone: dto.contributorPhone,
+          customData: dto.customData ? toJsonWriteValue(dto.customData) : undefined,
+          paymentMode: dto.paymentMode,
+          renderStatus: dto.customData ? RenderStatus.PENDING : undefined,
+          shopName: dto.shopName,
+          status: dto.status,
+        },
+        where: { id },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          action: 'slip_updated',
+          actorUserId: ctx.userId,
+          after: toJsonWriteValue(updated),
+          before: toJsonWriteValue(slip),
           entityId: id,
           entityType: 'vargani_slip',
           mandalId,

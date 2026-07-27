@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { AuthContext } from '../auth/auth-context';
@@ -8,6 +8,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
+import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { UpdateExpenseStatusDto } from './dto/update-expense-status.dto';
 import { ExpensesService } from './expenses.service';
 
@@ -55,6 +56,18 @@ export class ExpensesController {
     return this.expensesService.listExpenses(ctx, mandalId, festivalId);
   }
 
+  @Patch(':expenseId')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR)
+  updateExpense(
+    @AuthUser() ctx: AuthContext,
+    @Param('mandalId') mandalId: string,
+    @Param('festivalId') festivalId: string,
+    @Param('expenseId') expenseId: string,
+    @Body() dto: UpdateExpenseDto,
+  ) {
+    return this.expensesService.updateExpense(ctx, mandalId, festivalId, expenseId, dto);
+  }
+
   @Patch(':expenseId/status')
   @Roles(UserRole.SUPER_ADMIN, UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR)
   updateStatus(
@@ -64,5 +77,16 @@ export class ExpensesController {
     @Body() dto: UpdateExpenseStatusDto,
   ) {
     return this.expensesService.updateStatus(ctx, mandalId, expenseId, dto);
+  }
+
+  @Delete(':expenseId')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR)
+  deleteExpense(
+    @AuthUser() ctx: AuthContext,
+    @Param('mandalId') mandalId: string,
+    @Param('festivalId') festivalId: string,
+    @Param('expenseId') expenseId: string,
+  ) {
+    return this.expensesService.deleteExpense(ctx, mandalId, festivalId, expenseId);
   }
 }

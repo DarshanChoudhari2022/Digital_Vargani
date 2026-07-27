@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { AuthContext } from '../auth/auth-context';
@@ -8,6 +8,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { CreateMemberDto } from './dto/create-member.dto';
+import { UpdateMemberDto } from './dto/update-member.dto';
 import { MembersService } from './members.service';
 
 @ApiTags('members')
@@ -57,5 +58,28 @@ export class MembersController {
     @Param('festivalId') festivalId: string,
   ) {
     return this.membersService.listMembers(ctx, mandalId, festivalId);
+  }
+
+  @Patch('members/:memberId')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR)
+  updateMember(
+    @AuthUser() ctx: AuthContext,
+    @Param('mandalId') mandalId: string,
+    @Param('festivalId') festivalId: string,
+    @Param('memberId') memberId: string,
+    @Body() dto: UpdateMemberDto,
+  ) {
+    return this.membersService.updateMember(ctx, mandalId, festivalId, memberId, dto);
+  }
+
+  @Delete('members/:memberId')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR)
+  archiveMember(
+    @AuthUser() ctx: AuthContext,
+    @Param('mandalId') mandalId: string,
+    @Param('festivalId') festivalId: string,
+    @Param('memberId') memberId: string,
+  ) {
+    return this.membersService.archiveMember(ctx, mandalId, festivalId, memberId);
   }
 }

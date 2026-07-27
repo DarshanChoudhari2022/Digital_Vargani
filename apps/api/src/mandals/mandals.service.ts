@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateMandalDto } from './dto/create-mandal.dto';
 import { CreateMandalUserDto } from './dto/create-mandal-user.dto';
 import { ListMandalsQueryDto } from './dto/list-mandals-query.dto';
+import { UpdateMandalUserDto } from './dto/update-mandal-user.dto';
 import { UpdateMandalStatusDto } from './dto/update-mandal-status.dto';
 
 type JsonWriteValue = never;
@@ -267,6 +268,71 @@ export class MandalsService {
         entityId: id,
         entityType: 'mandal',
         mandalId: id,
+      },
+    });
+
+    return updated;
+  }
+
+  async updateUser(mandalId: string, userId: string, dto: UpdateMandalUserDto) {
+    await this.ensureMandalExists(mandalId);
+
+    if (dto.role && !ownerCreatableRoles.has(dto.role)) {
+      throw new BadRequestException('Role cannot be assigned for a mandal account.');
+    }
+
+    const before = await this.prisma.user.findFirst({ where: { id: userId, mandalId } });
+
+    if (!before) {
+      throw new NotFoundException('User not found.');
+    }
+
+    const uniqueChecks = [
+      dto.email ? { email: dto.email.toLowerCase(), id: { not: userId } } : null,
+      dto.phone ? { phone: dto.phone, id: { not: userId } } : null,
+    ].filter(Boolean) as Array<{
+      email?: string;
+      id: { not: string };
+      phone?: string;
+    }>;
+
+    if (uniqueChecks.length) {
+      const existingUser = await this.prisma.user.findFirst({ where: { OR: uniqueChecks } });
+
+      if (existingUser) {
+        throw new ConflictException('User email or phone is already used.');
+      }
+    }
+
+    const updated = await this.prisma.user.update({
+      data: {
+        email: dto.email?.toLowerCase(),
+        name: dto.name,
+        passwordHash: dto.password ? await argon2.hash(dto.password) : undefined,
+        phone: dto.phone,
+        role: dto.role,
+        status: dto.status,
+      },
+      select: {
+        createdAt: true,
+        email: true,
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+        status: true,
+      },
+      where: { id: userId },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        action: 'user_updated',
+        after: this.toJson(updated),
+        before: this.toJson(before),
+        entityId: userId,
+        entityType: 'user',
+        mandalId,
       },
     });
 

@@ -7,6 +7,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CreateMandalDto } from './dto/create-mandal.dto';
 import { CreateMandalUserDto } from './dto/create-mandal-user.dto';
 import { ListMandalsQueryDto } from './dto/list-mandals-query.dto';
+import { UpdateMandalUserDto } from './dto/update-mandal-user.dto';
 import { UpdateMandalStatusDto } from './dto/update-mandal-status.dto';
 import { MandalsService } from './mandals.service';
 
@@ -50,6 +51,17 @@ export class MandalsController {
   @ApiCreatedResponse({ description: 'Creates an additional mandal login account.' })
   createUser(@Param('id') id: string, @Body() dto: CreateMandalUserDto) {
     return this.mandalsService.createUser(id, dto);
+  }
+
+  @Patch(':id/users/:userId')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOkResponse({ description: 'Updates a mandal login account.' })
+  updateUser(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateMandalUserDto,
+  ) {
+    return this.mandalsService.updateUser(id, userId, dto);
   }
 
   @Patch(':id/status')

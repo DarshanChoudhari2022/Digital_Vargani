@@ -68,7 +68,7 @@ export class WorkspaceService {
           },
         },
         orderBy: { createdAt: 'desc' },
-        take: 100,
+        take: 24,
         where: { status: AccountStatus.ACTIVE },
       }),
       this.prisma.mandal.count({ where: { status: AccountStatus.ACTIVE } }),
@@ -82,10 +82,10 @@ export class WorkspaceService {
       mandals: {
         items: mandalRows,
         meta: {
-          limit: 100,
+          limit: 24,
           page: 1,
           total: totalMandals,
-          totalPages: Math.ceil(totalMandals / 100),
+          totalPages: Math.ceil(totalMandals / 24),
         },
       },
       metrics: {
@@ -123,7 +123,7 @@ export class WorkspaceService {
         members: [],
         metrics: emptyMandalMetrics(),
         report: emptyReport(),
-        slips: { items: [], meta: { limit: 50, page: 1, total: 0, totalPages: 0 } },
+        slips: { items: [], meta: { limit: 25, page: 1, total: 0, totalPages: 0 } },
         templates: [],
         user: await this.getUser(ctx.userId),
       };
@@ -175,7 +175,7 @@ export class WorkspaceService {
           },
         },
         orderBy: { displayName: 'asc' },
-        take: 200,
+        take: 100,
         where: { festivalId: activeFestival.id, mandalId },
       }),
       this.prisma.slipTemplate.findMany({
@@ -189,7 +189,7 @@ export class WorkspaceService {
       }),
       this.prisma.varganiSlip.findMany({
         orderBy: { createdAt: 'desc' },
-        take: 50,
+        take: 25,
         where: visibleSlipWhere,
       }),
       this.prisma.varganiSlip.count({ where: visibleSlipWhere }),
@@ -230,12 +230,12 @@ export class WorkspaceService {
           role: true,
           status: true,
         },
-        take: 100,
+        take: 50,
         where: { mandalId },
       }),
       this.prisma.auditEvent.findMany({
         orderBy: { createdAt: 'desc' },
-        take: 50,
+        take: 25,
         where: { mandalId },
       }),
     ]);
@@ -290,10 +290,10 @@ export class WorkspaceService {
       slips: {
         items: slips,
         meta: {
-          limit: 50,
+          limit: 25,
           page: 1,
           total: slipTotal,
-          totalPages: Math.ceil(slipTotal / 50),
+          totalPages: Math.ceil(slipTotal / 25),
         },
       },
       templates,

@@ -73,6 +73,20 @@ enum ExpenseStatus {
   REJECTED
 }
 
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 model Mandal {
   id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name         String
@@ -97,6 +111,7 @@ model Mandal {
   customFields CustomField[]
   slips        VarganiSlip[]
   expenses     Expense[]
+  tasks        FestivalTask[]
   auditEvents  AuditEvent[]
 
   @@map("mandals")
@@ -120,6 +135,8 @@ model User {
   collectedSlips   VarganiSlip[] @relation("SlipCollector")
   createdExpenses  Expense[]     @relation("ExpenseCreator")
   approvedExpenses Expense[]     @relation("ExpenseApprover")
+  assignedTasks    FestivalTask[] @relation("TaskAssignee")
+  createdTasks     FestivalTask[] @relation("TaskCreator")
   auditEvents      AuditEvent[]
   ledGroups        MemberGroup[] @relation("GroupLeader")
   sessions         UserSession[]
@@ -169,6 +186,7 @@ model Festival {
   customFields          CustomField[]
   slips                 VarganiSlip[]
   expenses              Expense[]
+  tasks                 FestivalTask[]
   slipSequence          SlipSequence?
 
   @@index([mandalId, status])
@@ -370,6 +388,30 @@ model Expense {
   @@index([mandalId, festivalId, expenseDate])
   @@index([mandalId, festivalId, status, expenseDate])
   @@map("expenses")
+}
+
+model FestivalTask {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandalId       String       @map("mandal_id") @db.Uuid
+  festivalId     String       @map("festival_id") @db.Uuid
+  title          String
+  notes          String?
+  assigneeUserId String?      @map("assignee_user_id") @db.Uuid
+  dueDate        DateTime?    @map("due_date") @db.Date
+  status         TaskStatus   @default(OPEN)
+  priority       TaskPriority @default(MEDIUM)
+  createdBy      String       @map("created_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  mandal   Mandal   @relation(fields: [mandalId], references: [id], onDelete: Restrict)
+  festival Festival @relation(fields: [festivalId], references: [id], onDelete: Cascade)
+  assignee User?    @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  creator  User     @relation("TaskCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([mandalId, festivalId, status, dueDate])
+  @@index([assigneeUserId, status])
+  @@map("festival_tasks")
 }
 
 model AuditEvent {

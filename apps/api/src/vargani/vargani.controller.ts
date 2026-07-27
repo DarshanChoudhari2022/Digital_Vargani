@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { AuthContext } from '../auth/auth-context';
@@ -10,6 +10,7 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CancelSlipDto } from './dto/cancel-slip.dto';
 import { CreateVarganiSlipDto } from './dto/create-vargani-slip.dto';
 import { ShareSlipDto } from './dto/share-slip.dto';
+import { UpdateVarganiSlipDto } from './dto/update-vargani-slip.dto';
 import { VarganiService } from './vargani.service';
 
 @ApiTags('vargani')
@@ -54,6 +55,12 @@ export class VarganiController {
   @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
   shareSlip(@AuthUser() ctx: AuthContext, @Param('id') id: string, @Body() dto: ShareSlipDto) {
     return this.varganiService.recordShare(ctx, id, dto);
+  }
+
+  @Patch('slips/:id')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
+  updateSlip(@AuthUser() ctx: AuthContext, @Param('id') id: string, @Body() dto: UpdateVarganiSlipDto) {
+    return this.varganiService.updateSlip(ctx, id, dto);
   }
 
   @Post('slips/:id/cancel')
