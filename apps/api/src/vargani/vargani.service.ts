@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   CustomFieldType,
   FestivalStatus,
@@ -11,9 +12,10 @@ import {
   SlipStatus,
   UserRole,
 } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AuthContext } from '../auth/auth-context';
 import { requireMandalId } from '../auth/tenant-scope';
+import { AppConfig } from '../config/app-config';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CancelSlipDto } from './dto/cancel-slip.dto';
@@ -68,7 +70,10 @@ type SlipWithTemplate = Awaited<ReturnType<VarganiService['getSlip']>> & {
 
 @Injectable()
 export class VarganiService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<AppConfig, true>,
+  ) {}
 
   async getActiveForm(ctx: AuthContext) {
     const mandalId = requireMandalId(ctx);
@@ -235,30 +240,48 @@ export class VarganiService {
       throw new BadRequestException('Receipt can be shared only after payment is received.');
     }
 
-    const event = await this.prisma.auditEvent.create({
-      data: {
-        action: 'shared_receipt',
-        actorUserId: ctx.userId,
-        entityId: slip.id,
-        entityType: 'vargani_slip',
-        mandalId: slip.mandalId,
-        metadata: toJsonWriteValue({
-          channel: dto.channel?.trim() || 'WHATSAPP',
-          phone: dto.phone?.trim() || slip.contributorPhone || null,
-          receiptUrl: dto.receiptUrl?.trim() || null,
-          slipNumber: slip.slipNumber,
-        }),
-      },
-    });
+    const shareToken = randomBytes(32).toString('base64url');
+    const shareTokenHash = hashShareToken(shareToken);
+    const shareTokenExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
+    const receiptUrl = this.publicReceiptUrl(shareToken);
+
+    const [, event] = await this.prisma.$transaction([
+      this.prisma.varganiSlip.update({
+        data: {
+          publicShareTokenExpiresAt: shareTokenExpiresAt,
+          publicShareTokenHash: shareTokenHash,
+        },
+        where: { id: slip.id },
+      }),
+      this.prisma.auditEvent.create({
+        data: {
+          action: 'shared_receipt',
+          actorUserId: ctx.userId,
+          entityId: slip.id,
+          entityType: 'vargani_slip',
+          mandalId: slip.mandalId,
+          metadata: toJsonWriteValue({
+            channel: dto.channel?.trim() || 'WHATSAPP',
+            expiresAt: shareTokenExpiresAt.toISOString(),
+            phone: dto.phone?.trim() || slip.contributorPhone || null,
+            receiptUrl,
+            slipNumber: slip.slipNumber,
+          }),
+        },
+      }),
+    ]);
 
     return {
       auditEventId: event.id,
+      expiresAt: shareTokenExpiresAt,
       ok: true,
+      receiptUrl,
       sharedAt: event.createdAt,
     };
   }
 
-  async renderPublicReceiptHtml(id: string) {
+  async renderPublicReceiptHtmlByToken(token: string) {
+    const tokenHash = hashShareToken(token);
     const slip = await this.prisma.varganiSlip.findFirst({
       include: {
         collector: { select: { id: true, name: true, phone: true } },
@@ -266,7 +289,11 @@ export class VarganiService {
         group: true,
         templateVersion: true,
       },
-      where: { id, status: SlipStatus.ACTIVE },
+      where: {
+        publicShareTokenExpiresAt: { gt: new Date() },
+        publicShareTokenHash: tokenHash,
+        status: SlipStatus.ACTIVE,
+      },
     });
 
     if (!slip) {
@@ -274,6 +301,45 @@ export class VarganiService {
     }
 
     return this.renderReceiptForSlip(slip);
+  }
+
+  async renderPublicReceiptHtml(id: string, token?: string) {
+    if (!token) {
+      throw new NotFoundException('Receipt not found.');
+    }
+
+    const tokenHash = hashShareToken(token);
+    const slip = await this.prisma.varganiSlip.findFirst({
+      include: {
+        collector: { select: { id: true, name: true, phone: true } },
+        festival: true,
+        group: true,
+        templateVersion: true,
+      },
+      where: {
+        id,
+        publicShareTokenExpiresAt: { gt: new Date() },
+        publicShareTokenHash: tokenHash,
+        status: SlipStatus.ACTIVE,
+      },
+    });
+
+    if (!slip) {
+      throw new NotFoundException('Receipt not found.');
+    }
+
+    return this.renderReceiptForSlip(slip);
+  }
+
+  private publicReceiptUrl(token: string) {
+    const configuredBase = this.config.get('PUBLIC_API_BASE_URL', { infer: true });
+    const baseUrl = (configuredBase || 'https://digital-vargani-api.vercel.app').replace(/\/$/, '');
+    const apiBaseUrl = /\/api\/v\d+$/.test(baseUrl)
+      ? baseUrl
+      : baseUrl.endsWith('/api')
+        ? `${baseUrl}/v1`
+        : `${baseUrl}/api/v1`;
+    return `${apiBaseUrl}/public/vargani/receipts/${encodeURIComponent(token)}.html`;
   }
 
   private async renderReceiptForSlip(slip: Awaited<ReturnType<VarganiService['getSlip']>>) {
@@ -559,6 +625,10 @@ function toJsonWriteValue(value: unknown): JsonWriteValue {
 function lastSlipNumberPart(slipNumber: string): string {
   const parts = slipNumber.split('-');
   return parts[parts.length - 1] ?? slipNumber;
+}
+
+function hashShareToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 function escapeHtml(value: string): string {

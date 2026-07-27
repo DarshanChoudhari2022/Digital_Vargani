@@ -75,9 +75,15 @@ export class VarganiController {
 export class PublicVarganiReceiptController {
   constructor(private readonly varganiService: VarganiService) {}
 
+  @Get('receipts/:token.html')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  getSignedReceiptHtml(@Param('token') token: string) {
+    return this.varganiService.renderPublicReceiptHtmlByToken(token);
+  }
+
   @Get('slips/:id/receipt.html')
   @Header('Content-Type', 'text/html; charset=utf-8')
-  getPublicReceiptHtml(@Param('id') id: string) {
-    return this.varganiService.renderPublicReceiptHtml(id);
+  getPublicReceiptHtml(@Param('id') id: string, @Query('token') token?: string) {
+    return this.varganiService.renderPublicReceiptHtml(id, token);
   }
 }

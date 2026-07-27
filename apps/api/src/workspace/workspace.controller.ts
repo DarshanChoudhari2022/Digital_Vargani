@@ -17,4 +17,10 @@ export class WorkspaceController {
   bootstrap(@AuthUser() authUser: AuthContext) {
     return this.workspaceService.bootstrap(authUser);
   }
+
+  @Get('summary')
+  @ApiOkResponse({ description: 'Returns lightweight dashboard metrics for fast refreshes.' })
+  summary(@AuthUser() authUser: AuthContext) {
+    return this.workspaceService.summary(authUser);
+  }
 }

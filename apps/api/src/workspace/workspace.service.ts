@@ -19,6 +19,87 @@ export class WorkspaceService {
     return this.bootstrapMandal(ctx);
   }
 
+  async summary(ctx: AuthContext) {
+    if (ctx.role === UserRole.SUPER_ADMIN) {
+      const [totalMandals, totalMembers, totalSlips] = await this.prisma.$transaction([
+        this.prisma.mandal.count({ where: { status: AccountStatus.ACTIVE } }),
+        this.prisma.member.count({ where: { status: AccountStatus.ACTIVE } }),
+        this.prisma.varganiSlip.count({ where: { status: SlipStatus.ACTIVE } }),
+      ]);
+
+      return {
+        generatedAt: new Date().toISOString(),
+        kind: 'OWNER',
+        metrics: { totalMandals, totalMembers, totalSlips },
+      };
+    }
+
+    if (!ctx.mandalId) {
+      throw new NotFoundException('Mandal workspace not found.');
+    }
+
+    const mandalId = ctx.mandalId;
+    const activeFestival = await this.prisma.festival.findFirst({
+      orderBy: { startDate: 'desc' },
+      select: { id: true },
+      where: { mandalId, status: FestivalStatus.ACTIVE },
+    });
+
+    if (!activeFestival) {
+      return {
+        generatedAt: new Date().toISOString(),
+        kind: 'MANDAL',
+        metrics: emptyMandalMetrics(),
+      };
+    }
+
+    const [activeSlipAmount, pendingSlipAmount, approvedExpenseAmount, paidCollectors, memberTotal] =
+      await this.prisma.$transaction([
+        this.prisma.varganiSlip.aggregate({
+          _count: { id: true },
+          _sum: { amount: true },
+          where: { festivalId: activeFestival.id, mandalId, status: SlipStatus.ACTIVE },
+        }),
+        this.prisma.varganiSlip.aggregate({
+          _count: { id: true },
+          _sum: { amount: true },
+          where: { festivalId: activeFestival.id, mandalId, status: SlipStatus.PENDING },
+        }),
+        this.prisma.expense.aggregate({
+          _count: { id: true },
+          _sum: { amount: true },
+          where: { festivalId: activeFestival.id, mandalId, status: ExpenseStatus.APPROVED },
+        }),
+        this.prisma.varganiSlip.findMany({
+          distinct: ['collectedByUserId'],
+          select: { collectedByUserId: true },
+          where: { festivalId: activeFestival.id, mandalId, status: SlipStatus.ACTIVE },
+        }),
+        this.prisma.member.count({ where: { festivalId: activeFestival.id, mandalId } }),
+      ]);
+
+    const totalCollection = Number(activeSlipAmount._sum.amount ?? 0);
+    const totalExpenses = Number(approvedExpenseAmount._sum.amount ?? 0);
+    const memberPaidCount = paidCollectors.length;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      kind: 'MANDAL',
+      metrics: {
+        balance: totalCollection - totalExpenses,
+        memberPaidCount,
+        memberPendingAmount: Math.max(0, Number(pendingSlipAmount._sum.amount ?? 0)),
+        memberPendingCount: Math.max(0, memberTotal - memberPaidCount),
+        memberTotal,
+        slipPaidAmount: totalCollection,
+        slipPaidCount: activeSlipAmount._count.id,
+        slipPendingAmount: Number(pendingSlipAmount._sum.amount ?? 0),
+        slipPendingCount: pendingSlipAmount._count.id,
+        totalExpenses,
+      },
+    };
+  }
+
   private async bootstrapOwner(ctx: AuthContext) {
     const [mandalRows, totalMandals, totalMembers, totalSlips] = await this.prisma.$transaction([
       this.prisma.mandal.findMany({

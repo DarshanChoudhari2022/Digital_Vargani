@@ -130,15 +130,15 @@ model User {
   createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  mandal           Mandal?       @relation(fields: [mandalId], references: [id], onDelete: Restrict)
+  mandal           Mandal?        @relation(fields: [mandalId], references: [id], onDelete: Restrict)
   memberProfiles   Member[]
-  collectedSlips   VarganiSlip[] @relation("SlipCollector")
-  createdExpenses  Expense[]     @relation("ExpenseCreator")
-  approvedExpenses Expense[]     @relation("ExpenseApprover")
+  collectedSlips   VarganiSlip[]  @relation("SlipCollector")
+  createdExpenses  Expense[]      @relation("ExpenseCreator")
+  approvedExpenses Expense[]      @relation("ExpenseApprover")
   assignedTasks    FestivalTask[] @relation("TaskAssignee")
   createdTasks     FestivalTask[] @relation("TaskCreator")
   auditEvents      AuditEvent[]
-  ledGroups        MemberGroup[] @relation("GroupLeader")
+  ledGroups        MemberGroup[]  @relation("GroupLeader")
   sessions         UserSession[]
 
   @@unique([phone])
@@ -311,29 +311,31 @@ model SlipSequence {
 }
 
 model VarganiSlip {
-  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  mandalId           String       @map("mandal_id") @db.Uuid
-  festivalId         String       @map("festival_id") @db.Uuid
-  templateVersionId  String?      @map("template_version_id") @db.Uuid
-  slipNumber         String       @map("slip_number")
-  contributorName    String       @map("contributor_name")
-  contributorPhone   String?      @map("contributor_phone")
-  contributorAddress String?      @map("contributor_address")
-  shopName           String?      @map("shop_name")
-  amount             Decimal      @db.Decimal(14, 2)
-  paymentMode        PaymentMode  @map("payment_mode")
-  collectedByUserId  String       @map("collected_by_user_id") @db.Uuid
-  groupId            String?      @map("group_id") @db.Uuid
-  areaName           String?      @map("area_name")
-  status             SlipStatus   @default(ACTIVE)
-  renderStatus       RenderStatus @default(PENDING) @map("render_status")
-  customData         Json         @default("{}") @map("custom_data_json")
-  receiptPdfUrl      String?      @map("receipt_pdf_url")
-  receiptImageUrl    String?      @map("receipt_image_url")
-  idempotencyKey     String?      @unique @map("idempotency_key")
-  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  cancelledAt        DateTime?    @map("cancelled_at") @db.Timestamptz(6)
-  cancellationReason String?      @map("cancellation_reason")
+  id                        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandalId                  String       @map("mandal_id") @db.Uuid
+  festivalId                String       @map("festival_id") @db.Uuid
+  templateVersionId         String?      @map("template_version_id") @db.Uuid
+  slipNumber                String       @map("slip_number")
+  contributorName           String       @map("contributor_name")
+  contributorPhone          String?      @map("contributor_phone")
+  contributorAddress        String?      @map("contributor_address")
+  shopName                  String?      @map("shop_name")
+  amount                    Decimal      @db.Decimal(14, 2)
+  paymentMode               PaymentMode  @map("payment_mode")
+  collectedByUserId         String       @map("collected_by_user_id") @db.Uuid
+  groupId                   String?      @map("group_id") @db.Uuid
+  areaName                  String?      @map("area_name")
+  status                    SlipStatus   @default(ACTIVE)
+  renderStatus              RenderStatus @default(PENDING) @map("render_status")
+  customData                Json         @default("{}") @map("custom_data_json")
+  receiptPdfUrl             String?      @map("receipt_pdf_url")
+  receiptImageUrl           String?      @map("receipt_image_url")
+  publicShareTokenHash      String?      @map("public_share_token_hash")
+  publicShareTokenExpiresAt DateTime?    @map("public_share_token_expires_at") @db.Timestamptz(6)
+  idempotencyKey            String?      @unique @map("idempotency_key")
+  createdAt                 DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  cancelledAt               DateTime?    @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason        String?      @map("cancellation_reason")
 
   mandal          Mandal               @relation(fields: [mandalId], references: [id], onDelete: Restrict)
   festival        Festival             @relation(fields: [festivalId], references: [id], onDelete: Restrict)
@@ -348,6 +350,8 @@ model VarganiSlip {
   @@index([mandalId, festivalId, areaName, createdAt])
   @@index([mandalId, festivalId, collectedByUserId, createdAt])
   @@index([mandalId, festivalId, groupId, createdAt])
+  @@index([publicShareTokenHash])
+  @@index([publicShareTokenExpiresAt])
   @@map("vargani_slips")
 }
 
