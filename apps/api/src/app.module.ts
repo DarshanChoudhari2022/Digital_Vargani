@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
 import { validateAppConfig } from './config/app-config';
 import { AuthModule } from './auth/auth.module';
@@ -14,6 +15,7 @@ import { ReportsModule } from './reports/reports.module';
 import { RootController } from './root.controller';
 import { TemplatesModule } from './templates/templates.module';
 import { VarganiModule } from './vargani/vargani.module';
+import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
   controllers: [RootController],
@@ -41,6 +43,13 @@ import { VarganiModule } from './vargani/vargani.module';
     ReportsModule,
     AuditModule,
     HealthModule,
+    WorkspaceModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
