@@ -9,6 +9,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CancelSlipDto } from './dto/cancel-slip.dto';
 import { CreateVarganiSlipDto } from './dto/create-vargani-slip.dto';
+import { ShareSlipDto } from './dto/share-slip.dto';
 import { VarganiService } from './vargani.service';
 
 @ApiTags('vargani')
@@ -47,6 +48,12 @@ export class VarganiController {
   @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
   getReceiptHtml(@AuthUser() ctx: AuthContext, @Param('id') id: string) {
     return this.varganiService.renderReceiptHtml(ctx, id);
+  }
+
+  @Post('slips/:id/share')
+  @Roles(UserRole.MANDAL_ADMIN, UserRole.KHAJINDAR, UserRole.GROUP_LEADER, UserRole.MEMBER)
+  shareSlip(@AuthUser() ctx: AuthContext, @Param('id') id: string, @Body() dto: ShareSlipDto) {
+    return this.varganiService.recordShare(ctx, id, dto);
   }
 
   @Post('slips/:id/cancel')

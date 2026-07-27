@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { AuthContext } from '../auth/auth-context';
@@ -9,6 +9,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateCustomFieldDto } from './dto/create-custom-field.dto';
 import { CreateSlipTemplateDto } from './dto/create-slip-template.dto';
 import { CreateTemplateVersionDto } from './dto/create-template-version.dto';
+import { SaveTemplateConfigDto } from './dto/save-template-config.dto';
 import { TemplatesService } from './templates.service';
 
 @ApiTags('templates')
@@ -58,6 +59,17 @@ export class TemplatesController {
     @Param('festivalId') festivalId: string,
   ) {
     return this.templatesService.listTemplates(ctx, mandalId, festivalId);
+  }
+
+  @Put('templates/active-version')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.MANDAL_ADMIN)
+  saveActiveTemplateVersion(
+    @AuthUser() ctx: AuthContext,
+    @Param('mandalId') mandalId: string,
+    @Param('festivalId') festivalId: string,
+    @Body() dto: SaveTemplateConfigDto,
+  ) {
+    return this.templatesService.saveActiveTemplateVersion(ctx, mandalId, festivalId, dto);
   }
 
   @Post('templates/:templateId/versions')

@@ -18,6 +18,7 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CancelSlipDto } from './dto/cancel-slip.dto';
 import { CreateVarganiSlipDto } from './dto/create-vargani-slip.dto';
+import { ShareSlipDto } from './dto/share-slip.dto';
 
 interface SequenceRow {
   current_value: bigint;
@@ -32,11 +33,25 @@ interface SlipListWhere {
 }
 
 interface TemplateFieldPlacement {
+  backgroundColor?: string;
+  borderColor?: string;
+  borderRadius?: number;
   color?: string;
+  fontFamily?: string;
   fontSize?: number;
+  fontStyle?: 'italic' | 'normal';
   fontWeight?: number | string;
   height?: number;
+  letterSpacing?: number;
+  lineHeight?: number;
+  opacity?: number;
+  padding?: number;
+  rotate?: number;
+  shadow?: boolean;
   textAlign?: 'center' | 'left' | 'right';
+  textDecoration?: string;
+  textTransform?: string;
+  textWrap?: 'shrink' | 'single' | 'wrap';
   width?: number;
   x: number;
   y: number;
@@ -213,6 +228,35 @@ export class VarganiService {
     return this.renderReceiptForSlip(slip);
   }
 
+  async recordShare(ctx: AuthContext, id: string, dto: ShareSlipDto) {
+    const slip = await this.getSlip(ctx, id);
+    if (slip.status !== SlipStatus.ACTIVE) {
+      throw new BadRequestException('Receipt can be shared only after payment is received.');
+    }
+
+    const event = await this.prisma.auditEvent.create({
+      data: {
+        action: 'shared_receipt',
+        actorUserId: ctx.userId,
+        entityId: slip.id,
+        entityType: 'vargani_slip',
+        mandalId: slip.mandalId,
+        metadata: toJsonWriteValue({
+          channel: dto.channel?.trim() || 'WHATSAPP',
+          phone: dto.phone?.trim() || slip.contributorPhone || null,
+          receiptUrl: dto.receiptUrl?.trim() || null,
+          slipNumber: slip.slipNumber,
+        }),
+      },
+    });
+
+    return {
+      auditEventId: event.id,
+      ok: true,
+      sharedAt: event.createdAt,
+    };
+  }
+
   async renderPublicReceiptHtml(id: string) {
     const slip = await this.prisma.varganiSlip.findFirst({
       include: {
@@ -315,10 +359,13 @@ export class VarganiService {
     const fieldValues: Record<string, string> = {
       amount: Number(slip.amount).toLocaleString('en-IN'),
       areaName: slip.areaName ?? '',
+      building_name: String(customData.building_name ?? ''),
+      collectorName: slip.collector.name,
       contributorAddress: slip.contributorAddress ?? '',
       contributorName: slip.contributorName,
       contributorPhone: slip.contributorPhone ?? '',
       createdAt: new Intl.DateTimeFormat('en-IN').format(slip.createdAt),
+      donorType: String(customData.donorType ?? ''),
       paymentMode: slip.paymentMode,
       shopName: slip.shopName ?? '',
       slipNumber: lastSlipNumberPart(slip.slipNumber).replace(/^0+/, '') || slip.slipNumber,
@@ -478,9 +525,20 @@ function fieldStyle(placement: TemplateFieldPlacement): string {
     `left:${placement.x}px`,
     `top:${placement.y}px`,
     `font-size:${placement.fontSize ?? 28}px`,
+    `font-family:${placement.fontFamily ?? 'Arial, sans-serif'}`,
+    `font-style:${placement.fontStyle ?? 'normal'}`,
     `font-weight:${placement.fontWeight ?? 800}`,
     `color:${placement.color ?? '#111'}`,
     `text-align:${placement.textAlign ?? 'left'}`,
+    `line-height:${placement.lineHeight ?? 1.08}`,
+    `letter-spacing:${placement.letterSpacing ?? 0}px`,
+    `opacity:${placement.opacity ?? 1}`,
+    `padding:${placement.padding ?? 0}px`,
+    `text-decoration:${placement.textDecoration ?? 'none'}`,
+    `text-transform:${placement.textTransform ?? 'none'}`,
+    `transform:rotate(${placement.rotate ?? 0}deg)`,
+    `white-space:${placement.textWrap === 'wrap' ? 'normal' : 'nowrap'}`,
+    `word-break:${placement.textWrap === 'wrap' ? 'break-word' : 'normal'}`,
   ];
 
   if (placement.width) {
@@ -489,6 +547,22 @@ function fieldStyle(placement: TemplateFieldPlacement): string {
 
   if (placement.height) {
     declarations.push(`height:${placement.height}px`);
+  }
+
+  if (placement.backgroundColor && placement.backgroundColor !== 'transparent') {
+    declarations.push(`background:${placement.backgroundColor}`);
+  }
+
+  if (placement.borderColor && placement.borderColor !== 'transparent') {
+    declarations.push(`border:1px solid ${placement.borderColor}`);
+  }
+
+  if (placement.borderRadius) {
+    declarations.push(`border-radius:${placement.borderRadius}px`);
+  }
+
+  if (placement.shadow) {
+    declarations.push('text-shadow:0 2px 4px rgba(0,0,0,.35)');
   }
 
   return declarations.join(';');

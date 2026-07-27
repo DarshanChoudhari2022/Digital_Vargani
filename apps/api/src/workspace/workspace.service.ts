@@ -44,6 +44,28 @@ export class WorkspaceService {
             },
             where: { role: UserRole.MANDAL_ADMIN },
           },
+          festivals: {
+            orderBy: { startDate: 'desc' },
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              targetAmount: true,
+              templates: {
+                include: {
+                  versions: {
+                    orderBy: { version: 'desc' },
+                    where: { isActive: true },
+                  },
+                },
+                orderBy: { updatedAt: 'desc' },
+                take: 1,
+              },
+              type: true,
+            },
+            take: 1,
+            where: { status: FestivalStatus.ACTIVE },
+          },
         },
         orderBy: { createdAt: 'desc' },
         take: 100,

@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomFieldDto } from './dto/create-custom-field.dto';
 import { CreateSlipTemplateDto } from './dto/create-slip-template.dto';
 import { CreateTemplateVersionDto } from './dto/create-template-version.dto';
+import { SaveTemplateConfigDto } from './dto/save-template-config.dto';
 
 const systemTemplateFields = new Set([
   'slipNumber',
@@ -23,7 +24,10 @@ const systemTemplateFields = new Set([
   'amount',
   'paymentMode',
   'areaName',
+  'building_name',
+  'collectorName',
   'createdAt',
+  'donorType',
 ]);
 
 type JsonWriteValue = never;
@@ -122,6 +126,94 @@ export class TemplatesService {
       },
       orderBy: { updatedAt: 'desc' },
       where: { festivalId, mandalId },
+    });
+  }
+
+  async saveActiveTemplateVersion(
+    ctx: AuthContext,
+    mandalId: string,
+    festivalId: string,
+    dto: SaveTemplateConfigDto,
+  ) {
+    assertSameMandal(ctx, mandalId);
+    await this.ensureFestival(mandalId, festivalId);
+    await this.validateRenderConfig(mandalId, festivalId, dto.renderConfig);
+
+    return this.prisma.$transaction(async (tx) => {
+      const template =
+        (await tx.slipTemplate.findFirst({
+          orderBy: { createdAt: 'asc' },
+          where: { festivalId, mandalId },
+        })) ??
+        (await tx.slipTemplate.create({
+          data: {
+            createdBy: ctx.userId,
+            festivalId,
+            mandalId,
+            name: dto.name?.trim() || 'Vargani Receipt Template',
+            status: TemplateStatus.DRAFT,
+          },
+        }));
+
+      const latest = await tx.slipTemplateVersion.aggregate({
+        _max: { version: true },
+        where: { templateId: template.id },
+      });
+      const versionNumber = (latest._max.version ?? 0) + 1;
+
+      const version = await tx.slipTemplateVersion.create({
+        data: {
+          backgroundFileUrl: dto.backgroundFileUrl,
+          canvasHeight: dto.canvasHeight,
+          canvasWidth: dto.canvasWidth,
+          renderConfig: toJsonWriteValue(dto.renderConfig),
+          templateId: template.id,
+          version: versionNumber,
+        },
+      });
+
+      await tx.slipTemplateVersion.updateMany({
+        data: { isActive: false },
+        where: { templateId: template.id },
+      });
+
+      const activeVersion = await tx.slipTemplateVersion.update({
+        data: { isActive: true },
+        where: { id: version.id },
+      });
+
+      const activeTemplate = await tx.slipTemplate.update({
+        data: {
+          name: dto.name?.trim() || template.name,
+          status: TemplateStatus.ACTIVE,
+        },
+        where: { id: template.id },
+      });
+
+      await tx.festival.update({
+        data: { activeTemplateVersionId: activeVersion.id },
+        where: { id: festivalId },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          action: 'saved_active_version',
+          actorUserId: ctx.userId,
+          after: toJsonWriteValue(activeVersion),
+          entityId: activeVersion.id,
+          entityType: 'slip_template_version',
+          mandalId,
+          metadata: toJsonWriteValue({
+            templateId: activeTemplate.id,
+            version: activeVersion.version,
+          }),
+        },
+      });
+
+      return {
+        template: activeTemplate,
+        version: activeVersion,
+      };
     });
   }
 
