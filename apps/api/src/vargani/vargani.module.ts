@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { VarganiController } from './vargani.controller';
+import { PublicVarganiReceiptController, VarganiController } from './vargani.controller';
 import { VarganiService } from './vargani.service';
 
 @Module({
-  controllers: [VarganiController],
+  controllers: [VarganiController, PublicVarganiReceiptController],
   imports: [AuthModule],
   providers: [VarganiService],
 })

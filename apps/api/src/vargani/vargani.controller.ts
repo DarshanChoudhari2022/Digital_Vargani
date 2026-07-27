@@ -55,3 +55,15 @@ export class VarganiController {
     return this.varganiService.cancelSlip(ctx, id, dto);
   }
 }
+
+@ApiTags('public-receipts')
+@Controller('public/vargani')
+export class PublicVarganiReceiptController {
+  constructor(private readonly varganiService: VarganiService) {}
+
+  @Get('slips/:id/receipt.html')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  getPublicReceiptHtml(@Param('id') id: string) {
+    return this.varganiService.renderPublicReceiptHtml(id);
+  }
+}

@@ -54,6 +54,7 @@ enum PaymentMode {
 
 enum SlipStatus {
   ACTIVE
+  PENDING
   CANCELLED
   CORRECTED
 }

@@ -112,6 +112,7 @@ export class VarganiService {
 
     return this.prisma.$transaction(async (tx) => {
       const nextValue = await this.nextSlipSequence(tx, mandalId, festival.id);
+      const slipStatus = dto.status === SlipStatus.PENDING ? SlipStatus.PENDING : SlipStatus.ACTIVE;
       const slipNumber = `DM-${festival.type.slice(0, 3).toUpperCase()}-${new Date(festival.startDate).getFullYear()}-${String(nextValue).padStart(6, '0')}`;
 
       const slip = await tx.varganiSlip.create({
@@ -128,10 +129,10 @@ export class VarganiService {
           idempotencyKey: dto.idempotencyKey,
           mandalId,
           paymentMode: dto.paymentMode,
-          renderStatus: RenderStatus.PENDING,
+          renderStatus: slipStatus === SlipStatus.PENDING ? RenderStatus.PENDING : RenderStatus.READY,
           shopName: dto.shopName,
           slipNumber,
-          status: SlipStatus.ACTIVE,
+          status: slipStatus,
           templateVersionId: festival.activeTemplateVersionId,
         },
       });
@@ -206,6 +207,31 @@ export class VarganiService {
 
   async renderReceiptHtml(ctx: AuthContext, id: string) {
     const slip = await this.getSlip(ctx, id);
+    if (slip.status !== SlipStatus.ACTIVE) {
+      throw new BadRequestException('Receipt is available only after payment is received.');
+    }
+    return this.renderReceiptForSlip(slip);
+  }
+
+  async renderPublicReceiptHtml(id: string) {
+    const slip = await this.prisma.varganiSlip.findFirst({
+      include: {
+        collector: { select: { id: true, name: true, phone: true } },
+        festival: true,
+        group: true,
+        templateVersion: true,
+      },
+      where: { id, status: SlipStatus.ACTIVE },
+    });
+
+    if (!slip) {
+      throw new NotFoundException('Receipt not found.');
+    }
+
+    return this.renderReceiptForSlip(slip);
+  }
+
+  private async renderReceiptForSlip(slip: Awaited<ReturnType<VarganiService['getSlip']>>) {
     const customFields = await this.prisma.customField.findMany({
       orderBy: { sortOrder: 'asc' },
       where: { festivalId: slip.festivalId, mandalId: slip.mandalId, printOnSlip: true },

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PaymentMode } from '@prisma/client';
+import { PaymentMode, SlipStatus } from '@prisma/client';
 import { IsEnum, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateVarganiSlipDto {
@@ -33,6 +33,11 @@ export class CreateVarganiSlipDto {
   @ApiProperty({ enum: PaymentMode })
   @IsEnum(PaymentMode)
   paymentMode!: PaymentMode;
+
+  @ApiPropertyOptional({ enum: SlipStatus, example: SlipStatus.ACTIVE })
+  @IsEnum(SlipStatus)
+  @IsOptional()
+  status?: SlipStatus;
 
   @ApiPropertyOptional({ example: 'Laxmi Road' })
   @IsOptional()
