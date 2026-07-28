@@ -113,6 +113,7 @@ model Mandal {
   expenses     Expense[]
   tasks        FestivalTask[]
   auditEvents  AuditEvent[]
+  jobs         BackgroundJob[]
 
   @@map("mandals")
 }
@@ -416,6 +417,31 @@ model FestivalTask {
   @@index([mandalId, festivalId, status, dueDate])
   @@index([assigneeUserId, status])
   @@map("festival_tasks")
+}
+
+model BackgroundJob {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mandalId     String?   @map("mandal_id") @db.Uuid
+  type         String
+  status       String    @default("QUEUED")
+  payload      Json      @default("{}")
+  attempts     Int       @default(0)
+  maxAttempts  Int       @default(3) @map("max_attempts")
+  runAfter     DateTime  @default(now()) @map("run_after") @db.Timestamptz(6)
+  startedAt    DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  failedAt     DateTime? @map("failed_at") @db.Timestamptz(6)
+  lockedAt     DateTime? @map("locked_at") @db.Timestamptz(6)
+  lockedBy     String?   @map("locked_by")
+  lastError    String?   @map("last_error")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  mandal Mandal? @relation(fields: [mandalId], references: [id], onDelete: SetNull)
+
+  @@index([status, runAfter, createdAt])
+  @@index([mandalId, status, createdAt])
+  @@map("background_jobs")
 }
 
 model AuditEvent {

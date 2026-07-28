@@ -17,6 +17,7 @@ import { AuthContext } from '../auth/auth-context';
 import { requireMandalId } from '../auth/tenant-scope';
 import { AppConfig } from '../config/app-config';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CancelSlipDto } from './dto/cancel-slip.dto';
 import { CreateVarganiSlipDto } from './dto/create-vargani-slip.dto';
@@ -71,6 +72,7 @@ type SlipWithTemplate = Awaited<ReturnType<VarganiService['getSlip']>> & {
 @Injectable()
 export class VarganiService {
   constructor(
+    private readonly jobsService: JobsService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppConfig, true>,
   ) {}
@@ -131,7 +133,7 @@ export class VarganiService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const slip = await this.prisma.$transaction(async (tx) => {
       const nextValue = await this.nextSlipSequence(tx, mandalId, festival.id);
       const slipStatus = dto.status === SlipStatus.PENDING ? SlipStatus.PENDING : SlipStatus.ACTIVE;
       const slipNumber = `DM-${festival.type.slice(0, 3).toUpperCase()}-${new Date(festival.startDate).getFullYear()}-${String(nextValue).padStart(6, '0')}`;
@@ -171,6 +173,21 @@ export class VarganiService {
 
       return slip;
     });
+
+    if (slip.status === SlipStatus.ACTIVE) {
+      await this.jobsService.enqueue({
+        mandalId,
+        payload: {
+          festivalId: festival.id,
+          slipId: slip.id,
+          slipNumber: slip.slipNumber,
+          templateVersionId: slip.templateVersionId,
+        },
+        type: 'RENDER_RECEIPT',
+      });
+    }
+
+    return slip;
   }
 
   async listSlips(ctx: AuthContext, query: PaginationQueryDto) {
@@ -270,6 +287,19 @@ export class VarganiService {
         },
       }),
     ]);
+
+    await this.jobsService.enqueue({
+      mandalId: slip.mandalId,
+      payload: {
+        auditEventId: event.id,
+        channel: dto.channel?.trim() || 'WHATSAPP',
+        phone: dto.phone?.trim() || slip.contributorPhone || null,
+        receiptUrl,
+        slipId: slip.id,
+        slipNumber: slip.slipNumber,
+      },
+      type: 'WHATSAPP_SHARE_AUDIT',
+    });
 
     return {
       auditEventId: event.id,

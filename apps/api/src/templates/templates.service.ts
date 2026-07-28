@@ -9,11 +9,14 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { AuthContext } from '../auth/auth-context';
 import { assertSameMandal } from '../auth/tenant-scope';
 import { slugify } from '../common/utils/slugify';
+import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateCustomFieldDto } from './dto/create-custom-field.dto';
 import { CreateSlipTemplateDto } from './dto/create-slip-template.dto';
 import { CreateTemplateVersionDto } from './dto/create-template-version.dto';
 import { SaveTemplateConfigDto } from './dto/save-template-config.dto';
+import { UploadTemplateAssetDto } from './dto/upload-template-asset.dto';
 
 const systemTemplateFields = new Set([
   'slipNumber',
@@ -34,7 +37,11 @@ type JsonWriteValue = never;
 
 @Injectable()
 export class TemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly jobsService: JobsService,
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
+  ) {}
 
   async createCustomField(
     ctx: AuthContext,
@@ -127,6 +134,42 @@ export class TemplatesService {
       orderBy: { updatedAt: 'desc' },
       where: { festivalId, mandalId },
     });
+  }
+
+  async uploadTemplateAsset(
+    ctx: AuthContext,
+    mandalId: string,
+    festivalId: string,
+    dto: UploadTemplateAssetDto,
+  ) {
+    assertSameMandal(ctx, mandalId);
+    await this.ensureFestival(mandalId, festivalId);
+
+    const asset = await this.storageService.uploadDataUrl({
+      dataUrl: dto.dataUrl,
+      fileName: dto.fileName,
+      folder: `mandals/${mandalId}/festivals/${festivalId}/templates`,
+    });
+
+    await this.audit(ctx, mandalId, 'template_asset', asset.key ?? asset.url, 'uploaded', undefined, {
+      bucket: asset.bucket,
+      key: asset.key,
+      storage: asset.storage,
+      url: asset.url,
+    });
+
+    await this.jobsService.enqueue({
+      mandalId,
+      payload: {
+        bucket: asset.bucket,
+        festivalId,
+        key: asset.key,
+        storage: asset.storage,
+      },
+      type: 'TEMPLATE_ASSET_AUDIT',
+    });
+
+    return asset;
   }
 
   async saveActiveTemplateVersion(

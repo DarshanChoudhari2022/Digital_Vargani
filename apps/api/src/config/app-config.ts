@@ -18,6 +18,9 @@ const appConfigSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional().default(''),
   S3_SECRET_ACCESS_KEY: z.string().optional().default(''),
   S3_PUBLIC_BASE_URL: z.string().optional().default(''),
+  SUPABASE_URL: z.string().optional().default(''),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional().default(''),
+  SUPABASE_STORAGE_BUCKET: z.string().min(1).default('digital-vargani'),
   CORS_ORIGINS: z
     .string()
     .default('http://localhost:3000,http://localhost:4000')

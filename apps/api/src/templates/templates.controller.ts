@@ -11,6 +11,7 @@ import { CreateSlipTemplateDto } from './dto/create-slip-template.dto';
 import { CreateTemplateVersionDto } from './dto/create-template-version.dto';
 import { SaveTemplateConfigDto } from './dto/save-template-config.dto';
 import { TemplatesService } from './templates.service';
+import { UploadTemplateAssetDto } from './dto/upload-template-asset.dto';
 
 @ApiTags('templates')
 @ApiBearerAuth()
@@ -59,6 +60,17 @@ export class TemplatesController {
     @Param('festivalId') festivalId: string,
   ) {
     return this.templatesService.listTemplates(ctx, mandalId, festivalId);
+  }
+
+  @Post('templates/assets')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.MANDAL_ADMIN)
+  uploadTemplateAsset(
+    @AuthUser() ctx: AuthContext,
+    @Param('mandalId') mandalId: string,
+    @Param('festivalId') festivalId: string,
+    @Body() dto: UploadTemplateAssetDto,
+  ) {
+    return this.templatesService.uploadTemplateAsset(ctx, mandalId, festivalId, dto);
   }
 
   @Put('templates/active-version')
