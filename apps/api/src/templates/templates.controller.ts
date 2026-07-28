@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { AuthContext } from '../auth/auth-context';
@@ -12,6 +12,7 @@ import { CreateTemplateVersionDto } from './dto/create-template-version.dto';
 import { SaveTemplateConfigDto } from './dto/save-template-config.dto';
 import { TemplatesService } from './templates.service';
 import { UploadTemplateAssetDto } from './dto/upload-template-asset.dto';
+import { UpdateCustomFieldDto } from './dto/update-custom-field.dto';
 
 @ApiTags('templates')
 @ApiBearerAuth()
@@ -39,6 +40,29 @@ export class TemplatesController {
     @Param('festivalId') festivalId: string,
   ) {
     return this.templatesService.listCustomFields(ctx, mandalId, festivalId);
+  }
+
+  @Patch('custom-fields/:fieldId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.MANDAL_ADMIN)
+  updateCustomField(
+    @AuthUser() ctx: AuthContext,
+    @Param('mandalId') mandalId: string,
+    @Param('festivalId') festivalId: string,
+    @Param('fieldId') fieldId: string,
+    @Body() dto: UpdateCustomFieldDto,
+  ) {
+    return this.templatesService.updateCustomField(ctx, mandalId, festivalId, fieldId, dto);
+  }
+
+  @Delete('custom-fields/:fieldId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.MANDAL_ADMIN)
+  deleteCustomField(
+    @AuthUser() ctx: AuthContext,
+    @Param('mandalId') mandalId: string,
+    @Param('festivalId') festivalId: string,
+    @Param('fieldId') fieldId: string,
+  ) {
+    return this.templatesService.deleteCustomField(ctx, mandalId, festivalId, fieldId);
   }
 
   @Post('templates')

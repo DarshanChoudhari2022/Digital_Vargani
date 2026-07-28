@@ -17,6 +17,7 @@ import { CreateSlipTemplateDto } from './dto/create-slip-template.dto';
 import { CreateTemplateVersionDto } from './dto/create-template-version.dto';
 import { SaveTemplateConfigDto } from './dto/save-template-config.dto';
 import { UploadTemplateAssetDto } from './dto/upload-template-asset.dto';
+import { UpdateCustomFieldDto } from './dto/update-custom-field.dto';
 
 const systemTemplateFields = new Set([
   'slipNumber',
@@ -97,6 +98,73 @@ export class TemplatesService {
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       where: { festivalId, mandalId },
     });
+  }
+
+  async updateCustomField(
+    ctx: AuthContext,
+    mandalId: string,
+    festivalId: string,
+    fieldId: string,
+    dto: UpdateCustomFieldDto,
+  ) {
+    assertSameMandal(ctx, mandalId);
+    await this.ensureFestival(mandalId, festivalId);
+
+    const before = await this.prisma.customField.findFirst({
+      where: { festivalId, id: fieldId, mandalId },
+    });
+
+    if (!before) {
+      throw new NotFoundException('Custom field not found.');
+    }
+
+    const nextType = dto.type ?? before.type;
+    const nextOptions =
+      dto.options?.map((option) => String(option).trim()).filter(Boolean) ??
+      ((before.options as string[] | null) ?? undefined);
+
+    if (nextType === CustomFieldType.DROPDOWN && (!nextOptions || nextOptions.length === 0)) {
+      throw new BadRequestException('Dropdown fields require at least one option.');
+    }
+
+    const after = await this.prisma.customField.update({
+      data: {
+        dashboardFilter: dto.dashboardFilter,
+        label: dto.label?.trim(),
+        options: dto.options ? toJsonWriteValue(nextOptions) : undefined,
+        printOnSlip: dto.printOnSlip,
+        required: dto.required,
+        sortOrder: dto.sortOrder,
+        type: dto.type,
+      },
+      where: { id: fieldId },
+    });
+
+    await this.audit(ctx, mandalId, 'custom_field', fieldId, 'updated', before, after);
+    return after;
+  }
+
+  async deleteCustomField(
+    ctx: AuthContext,
+    mandalId: string,
+    festivalId: string,
+    fieldId: string,
+  ) {
+    assertSameMandal(ctx, mandalId);
+    await this.ensureFestival(mandalId, festivalId);
+
+    const before = await this.prisma.customField.findFirst({
+      where: { festivalId, id: fieldId, mandalId },
+    });
+
+    if (!before) {
+      throw new NotFoundException('Custom field not found.');
+    }
+
+    await this.prisma.customField.delete({ where: { id: fieldId } });
+    await this.audit(ctx, mandalId, 'custom_field', fieldId, 'deleted', before, undefined);
+
+    return { deleted: true, id: fieldId };
   }
 
   async createTemplate(

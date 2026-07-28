@@ -96,7 +96,7 @@ const customFields = [
     label: 'Donor Type',
     options: ['Family', 'Shop', 'Sponsor'],
     printOnSlip: false,
-    required: true,
+    required: false,
     sortOrder: 1,
     type: 'DROPDOWN',
   },
